@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Tailwind v4 is CSS-first: design tokens live here, not in a JS config. */
+@theme {
+  --font-sans: "Assistant", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50:  #eef6f8;
+  --color-brand-100: #d6e9ee;
+  --color-brand-300: #7fb4c2;
+  --color-brand-500: #2b7d94;
+  --color-brand-600: #1f6376;
+  --color-brand-700: #17505e;
+  --color-brand-900: #0e3945;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-white text-slate-900 antialiased;
+    margin: 0;
+    font-family: var(--font-sans);
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-600;
+  }
+}
