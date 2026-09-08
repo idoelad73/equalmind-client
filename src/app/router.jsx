@@ -4,10 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { HomePage } from '@/pages/HomePage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import { LandingIndex } from '@/pages/landing/LandingIndex'
-import { LandingA } from '@/pages/landing/LandingA'
-import { LandingB } from '@/pages/landing/LandingB'
-import { LandingC } from '@/pages/landing/LandingC'
+import { LandingPage } from '@/pages/LandingPage'
 
 // Recharts is heavy; keep it out of the initial bundle.
 const DashboardPage = lazy(() =>
@@ -52,9 +49,10 @@ export const router = createBrowserRouter([
   },
   { path: '/login', element: <LoginPage /> },
 
-  // Landing directions under review - full-bleed, outside AppLayout.
-  { path: '/landing', element: <LandingIndex /> },
-  { path: '/landing/a', element: <LandingA /> },
-  { path: '/landing/b', element: <LandingB /> },
-  { path: '/landing/c', element: <LandingC /> },
+  // Public landing - full-bleed, outside AppLayout.
+  { path: '/landing', element: <LandingPage palette="petrol" /> },
+  { path: '/landing/petrol', element: <LandingPage palette="petrol" /> },
+  { path: '/landing/indigo', element: <LandingPage palette="indigo" /> },
+  { path: '/landing/green', element: <LandingPage palette="green" /> },
+  { path: '/landing/plum', element: <LandingPage palette="plum" /> },
 ])

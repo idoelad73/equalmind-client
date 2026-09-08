@@ -11,6 +11,14 @@
   --color-brand-600: #1f6376;
   --color-brand-700: #17505e;
   --color-brand-900: #0e3945;
+
+  /* natural sage - landing ground and foliage */
+  --color-sage-50:  #f3f9f5;
+  --color-sage-100: #e4f0e8;
+  --color-sage-200: #cfe3d7;
+  --color-sage-400: #8fb8a1;
+  --color-sage-500: #6fa086;
+  --color-sage-700: #47705c;
 }
 
 @layer base {
