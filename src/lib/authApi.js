@@ -32,9 +32,25 @@ function toUser(user) {
   }
 }
 
-export async function register({ email, password }) {
+export async function register({ email, password, organization }) {
   assertConfigured()
-  const { data, error } = await supabase.auth.signUp({ email, password })
+
+  // The affiliation rides along in signup metadata, which the database
+  // trigger copies onto the profile. Safe here because it is a claim about
+  // oneself, not a permission - account type is never read from metadata.
+  const data_ = organization?.name
+    ? {
+        org_name: organization.name,
+        org_registry_id: organization.registryId ?? '',
+        org_registry_source: organization.source ?? '',
+      }
+    : undefined
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    ...(data_ ? { options: { data: data_ } } : {}),
+  })
   if (error) throw new Error(translate(error))
 
   // With email confirmation switched on, Supabase returns a user but no

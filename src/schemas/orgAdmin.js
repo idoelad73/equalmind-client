@@ -27,7 +27,18 @@ export const orgRequestSchema = z.object({
   mobile: mobileSchema,
   contactEmail: emailSchema,
 
-  orgName: z.string().trim().min(2, 'נא להזין שם ארגון').max(150),
+  organization: z
+    .object({
+      name: z.string().trim().min(2),
+      registryId: z.string().min(3),
+      source: z.enum(['companies', 'nonprofits']),
+      city: z.string().nullable().optional(),
+      status: z.string().nullable().optional(),
+    })
+    .nullable()
+    .refine((v) => v !== null && Boolean(v.registryId), {
+      message: 'יש לבחור ארגון מתוך המרשם',
+    }),
   orgAddress: optionalText(250),
   industry: z.string().trim().min(2, 'נא להזין ענף או סוג עיסוק').max(120),
   companyNumber: optionalText(30),
@@ -53,7 +64,20 @@ export const orgOnboardingSchema = z
     password: z.string().min(8, 'הסיסמה חייבת להכיל לפחות 8 תווים').max(72),
     confirmPassword: z.string(),
 
-    orgName: z.string().trim().min(2, 'נא להזין שם ארגון').max(150),
+    // Selected from the registry, not typed: the registration number is what
+    // makes the answer checkable later.
+    organization: z
+      .object({
+        name: z.string().trim().min(2),
+        registryId: z.string().min(3),
+        source: z.enum(['companies', 'nonprofits']),
+        city: z.string().nullable().optional(),
+        status: z.string().nullable().optional(),
+      })
+      .nullable()
+      .refine((v) => v !== null && Boolean(v.registryId), {
+        message: 'יש לבחור ארגון מתוך המרשם',
+      }),
     orgAddress: optionalText(250),
     industry: z.string().trim().min(2, 'נא להזין ענף או סוג עיסוק').max(120),
     companyNumber: optionalText(30),

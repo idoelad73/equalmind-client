@@ -20,6 +20,15 @@ export const passwordSchema = z
   .min(8, 'הסיסמה חייבת להכיל לפחות 8 תווים')
   .max(72, 'הסיסמה ארוכה מדי')
 
+/** Optional, self-declared workplace. Set from the profile page, not at signup. */
+export const affiliationSchema = z
+  .object({
+    name: z.string().trim().min(2, 'נא לבחור ארגון'),
+    registryId: z.string().nullable().optional(),
+    source: z.enum(['companies', 'nonprofits']).nullable().optional(),
+  })
+  .nullable()
+
 export const loginSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
@@ -32,6 +41,8 @@ export const loginSchema = z.object({
  */
 export const registerSchema = z
   .object({
+    // Optional: an anonymous account stays valid without it.
+    organization: affiliationSchema.optional(),
     email: emailSchema,
     emailConfirm: z
       .string()

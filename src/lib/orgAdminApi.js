@@ -17,8 +17,15 @@ const EMPLOYEE_LIST_BUCKET = 'employee-lists'
  * queue cannot be scraped.
  */
 export async function submitOrgRequest(details) {
+  const { organization, ...rest } = details
+  const payload = {
+    ...rest,
+    orgName: organization?.name,
+    companyNumber: organization?.registryId ?? rest.companyNumber ?? undefined,
+    registrySource: organization?.source ?? undefined,
+  }
   try {
-    const { data } = await api.post('/org/requests', details)
+    const { data } = await api.post('/org/requests', payload)
     return data
   } catch (error) {
     if (error?.status === 429) return Promise.reject(new Error('נשלחו יותר מדי בקשות. נסה/י שוב בעוד מספר דקות.'))
@@ -53,13 +60,31 @@ export async function loadInviteContext() {
     prefill: {
       fullName: membership?.full_name ?? '',
       mobile: membership?.mobile ?? '',
-      orgName: org?.name ?? '',
+      // Shaped for OrgAutocomplete. Only prefilled when we hold a registration
+      // number, since a bare name is not a registry selection.
+      organization:
+        org?.name && org?.company_number
+          ? {
+              name: org.name,
+              registryId: org.company_number,
+              source: registrySourceFor(org.company_number),
+            }
+          : null,
       industry: org?.industry ?? '',
       companyNumber: org?.company_number ?? '',
       orgAddress: org?.address ?? '',
       employeeCount: org?.employee_count == null ? '' : String(org.employee_count),
     },
   }
+}
+
+/**
+ * Israeli registration numbers are self-describing: עמותות are allocated the
+ * 58 block, companies the 51-57 blocks. Enough to label a prefilled value
+ * without a second lookup.
+ */
+function registrySourceFor(id) {
+  return String(id).startsWith('58') ? 'nonprofits' : 'companies'
 }
 
 /**
@@ -100,7 +125,9 @@ export async function completeOnboarding({ organizationId, details, csvFile }) {
       full_name: rest.fullName,
       mobile: rest.mobile,
       contact_email: rest.contactEmail,
-      org_name: rest.orgName,
+      org_name: rest.organization?.name ?? null,
+      registry_id: rest.organization?.registryId ?? null,
+      registry_source: rest.organization?.source ?? null,
       org_address: rest.orgAddress ?? null,
       industry: rest.industry,
       company_number: rest.companyNumber ?? null,

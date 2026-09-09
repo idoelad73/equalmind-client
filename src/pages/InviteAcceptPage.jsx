@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
+import { OrgAutocomplete } from '@/components/ui/OrgAutocomplete'
 import { paths } from '@/routes/paths'
 import { fieldErrors } from '@/schemas/auth'
 import { EMPLOYEE_CSV, orgOnboardingSchema } from '@/schemas/orgAdmin'
@@ -24,7 +25,7 @@ const EMPTY = {
   contactEmail: '',
   password: '',
   confirmPassword: '',
-  orgName: '',
+  organization: null,
   orgAddress: '',
   industry: '',
   companyNumber: '',
@@ -199,14 +200,19 @@ export function InviteAcceptPage() {
           </Section>
 
           <Section icon={Building2} title="פרטי הארגון/הלקוח">
-            <Field
-              label="שם"
-              name="orgName"
+            <OrgAutocomplete
+              label="שם הארגון"
               required
-              placeholder="שם הארגון"
-              value={form.orgName}
-              error={errors.orgName}
-              onChange={set('orgName')}
+              value={form.organization}
+              error={errors.organization}
+              hint="יש לבחור מתוך מרשם החברות והעמותות."
+              onChange={(organization) =>
+                setForm((f) => ({
+                  ...f,
+                  organization,
+                  companyNumber: organization?.registryId ?? '',
+                }))
+              }
             />
             <Field
               label="כתובת מלאה – רחוב, מספר, מיקוד, ת.ד"
@@ -230,7 +236,8 @@ export function InviteAcceptPage() {
               name="companyNumber"
               dir="ltr"
               inputMode="numeric"
-              placeholder="מספר ח.פ או עוסק מורשה"
+              placeholder="מתמלא אוטומטית מהמרשם"
+              hint="מתקבל מהמרשם לפי הארגון שנבחר."
               value={form.companyNumber}
               error={errors.companyNumber}
               onChange={set('companyNumber')}

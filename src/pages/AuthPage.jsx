@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowRight, Loader2, ShieldCheck } from 'lucide-react'
 import { GoogleMark } from '@/components/auth/GoogleMark'
+import { OrgAutocomplete } from '@/components/ui/OrgAutocomplete'
 import { loginSchema, registerSchema, fieldErrors } from '@/schemas/auth'
 import { login, register, loginWithGoogle } from '@/lib/authApi'
 import { useAuthStore } from '@/store/authStore'
@@ -33,7 +34,12 @@ export function AuthPage({ mode = 'login' }) {
   const navigate = useNavigate()
   const setSession = useAuthStore((state) => state.setSession)
 
-  const [form, setForm] = useState({ email: '', emailConfirm: '', password: '' })
+  const [form, setForm] = useState({
+    email: '',
+    emailConfirm: '',
+    password: '',
+    organization: null,
+  })
   const [errors, setErrors] = useState({})
 
   const submit = useMutation({
@@ -56,8 +62,8 @@ export function AuthPage({ mode = 'login' }) {
       return
     }
     setErrors({})
-    const { email, password } = result.data
-    submit.mutate({ email, password })
+    const { email, password, organization } = result.data
+    submit.mutate({ email, password, organization })
   }
 
   const busy = submit.isPending || google.isPending
@@ -119,6 +125,16 @@ export function AuthPage({ mode = 'login' }) {
             hint={mode === 'register' ? 'לפחות 8 תווים.' : undefined}
             onChange={(password) => setForm((f) => ({ ...f, password }))}
           />
+
+          {mode === 'register' && (
+            <OrgAutocomplete
+              label="מקום העבודה"
+              value={form.organization}
+              allowManual
+              hint="אופציונלי. עוזר לשייך דיווחים למרחב הנכון, וניתן לשנות בכל עת בפרופיל."
+              onChange={(organization) => setForm((f) => ({ ...f, organization }))}
+            />
+          )}
 
           {failure && (
             <p
