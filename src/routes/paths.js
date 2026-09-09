@@ -9,6 +9,8 @@ export const paths = {
   landing: '/',
   login: '/login',
   register: '/register',
+  orgRequest: '/register/organization',
+  inviteAccept: '/invite/accept',
 
   app: '/app',
   space: (key = ':space') => `/app/space/${key}`,

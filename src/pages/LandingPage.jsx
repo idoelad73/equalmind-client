@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { Building2 } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { GoogleMark } from '@/components/auth/GoogleMark'
 import { loginWithGoogle } from '@/lib/authApi'
@@ -78,6 +79,24 @@ export function LandingPage() {
             <p className="mt-5 text-xs leading-relaxed text-[var(--l-muted)]">
               הדיווחים אנונימיים. הזהות שלך לעולם אינה נשמרת לצד הדיווח.
             </p>
+          </div>
+
+          {/* A second, deliberately separate path: organisations register an
+              account and their organisation together, and wait for approval. */}
+          <div className="relative mt-4 rounded-2xl border border-dashed border-[var(--l-ring)] bg-white/70 p-5 backdrop-blur-sm">
+            <p className="text-sm font-semibold text-[var(--l-ink)]">
+              נרשמים בשם ארגון?
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--l-muted)]">
+              רישום ארגון ומנהל.ת מערכת הוא תהליך נפרד, והוא טעון אישור.
+            </p>
+            <Link
+              to={paths.orgRequest}
+              className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[var(--l-primary)] text-[15px] font-semibold text-[var(--l-primary)] transition-colors hover:bg-[var(--l-soft)]"
+            >
+              <Building2 size={17} aria-hidden="true" />
+              לרישום ארגון
+            </Link>
           </div>
         </div>
 

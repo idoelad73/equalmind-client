@@ -8,6 +8,8 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { AboutPage } from '@/pages/AboutPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { LandingPage } from '@/pages/LandingPage'
+import { OrgRequestPage } from '@/pages/OrgRequestPage'
+import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
 import { paths, appSegments } from './paths'
@@ -40,6 +42,11 @@ export const router = createBrowserRouter([
   { path: paths.landing, element: publicOnly(<LandingPage />) },
   { path: paths.login, element: publicOnly(<AuthPage mode="login" />) },
   { path: paths.register, element: publicOnly(<AuthPage mode="register" />) },
+  { path: paths.orgRequest, element: publicOnly(<OrgRequestPage />) },
+
+  // NOT publicOnly: an invitee arrives already holding a session, and that
+  // guard would bounce them into the app before they set a password.
+  { path: paths.inviteAccept, element: <InviteAcceptPage /> },
 
   {
     path: paths.app,
