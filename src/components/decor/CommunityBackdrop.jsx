@@ -1,25 +1,79 @@
 /**
  * Decorative community motifs for the landing page.
  *
- * Top: two clusters of figures connected into a small network, held to the
- * outer edges so the headline keeps the centre, and masked to fade downward.
- * Bottom: a linked row of figures, all identical in size - the equality the
- * product is about.
+ * CommunityBackdrop - two small networks of figures at the top, held to the
+ * outer edges so the headline keeps the centre, fading downward.
+ * LinkedRings - two rings of people holding hands, overlapping like chain
+ * links, wrapped around the sign-in card. Every figure is the same size.
  *
  * Ornamental only: hidden from assistive tech and non-interactive.
  */
 
-/** One figure standing on the given baseline. */
-function Person({ x, y, scale = 1 }) {
+/** One figure, standing "up" along -y from its own origin. */
+function Person({ x, y, rotate = 0, scale = 1 }) {
   return (
-    <g transform={`translate(${x} ${y}) scale(${scale})`}>
+    <g transform={`translate(${x} ${y}) rotate(${rotate}) scale(${scale})`}>
       <circle cx="0" cy="-26" r="7.5" fill="currentColor" />
       <path d="M-13 0C-13-13-7-17 0-17s13 4 13 17Z" fill="currentColor" />
     </g>
   )
 }
 
-/** Thin tie between two figures, drawn head to head. */
+/**
+ * A ring of people holding hands. The joined arms are one stroked circle
+ * drawn *behind* the bodies at arm height, so the hands genuinely meet
+ * rather than having lines drawn between them.
+ */
+function HandCircle({ cx, cy, r, count, scale = 0.7 }) {
+  const people = Array.from({ length: count }, (_, i) => {
+    const deg = (360 / count) * i
+    const rad = (deg * Math.PI) / 180
+    return {
+      key: i,
+      x: cx + r * Math.cos(rad),
+      y: cy + r * Math.sin(rad),
+      rotate: deg + 90, // head points away from the centre
+    }
+  })
+
+  return (
+    <g>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r + 10 * scale}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2.4 * scale}
+      />
+      {people.map((p) => (
+        <Person key={p.key} x={p.x} y={p.y} rotate={p.rotate} scale={scale} />
+      ))}
+    </g>
+  )
+}
+
+/**
+ * Two rings offset by exactly one radius - the classic chain-link overlap.
+ * The crossing points fall just clear of the card above and below it, so the
+ * link between the two groups stays visible.
+ */
+export function LinkedRings({ className = '' }) {
+  return (
+    <svg
+      viewBox="0 0 760 640"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+      className={`pointer-events-none text-[var(--l-figure)] opacity-[0.2] ${className}`}
+    >
+      <HandCircle cx={270} cy={320} r={220} count={30} />
+      <HandCircle cx={490} cy={320} r={220} count={30} />
+    </svg>
+  )
+}
+
+/* ---------- upper network ---------- */
+
 function Tie({ a, b }) {
   return (
     <line
@@ -34,7 +88,6 @@ function Tie({ a, b }) {
   )
 }
 
-// Two clusters hugging the outer edges; the middle stays clear for the text.
 const START_CLUSTER = [
   [70, 150],
   [138, 116],
@@ -67,18 +120,13 @@ function Cluster({ nodes }) {
   )
 }
 
-// Bottom band
-const BASELINE = 58
-const ROW = Array.from({ length: 27 }, (_, i) => 26 + i * 46)
-
 export function CommunityBackdrop() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* upper social network */}
       <svg
         viewBox="0 0 1200 230"
-        preserveAspectRatio="xMidYMin slice"
-        className="absolute inset-x-0 top-0 h-[210px] w-full text-[var(--l-figure)] opacity-[0.15] sm:h-[250px]"
+        preserveAspectRatio="xMidYMin meet"
+        className="absolute inset-x-0 top-0 h-auto w-full text-[var(--l-figure)] opacity-[0.15]"
       >
         <defs>
           <linearGradient id="eqFadeDown" x1="0" y1="0" x2="0" y2="1">
@@ -93,27 +141,6 @@ export function CommunityBackdrop() {
           <Cluster nodes={START_CLUSTER} />
           <Cluster nodes={END_CLUSTER} />
         </g>
-      </svg>
-
-      {/* lower linked row */}
-      <svg
-        viewBox="0 0 1240 70"
-        preserveAspectRatio="xMidYMax slice"
-        className="absolute inset-x-0 bottom-0 h-[120px] w-full text-[var(--l-figure)] opacity-[0.22] sm:h-[150px]"
-      >
-        {ROW.slice(0, -1).map((x, i) => (
-          <path
-            key={`link-${x}`}
-            d={`M${x + 13} ${BASELINE - 9}Q${(x + 13 + ROW[i + 1] - 13) / 2} ${BASELINE - 1} ${ROW[i + 1] - 13} ${BASELINE - 9}`}
-            stroke="currentColor"
-            strokeWidth="2.6"
-            strokeLinecap="round"
-            fill="none"
-          />
-        ))}
-        {ROW.map((x) => (
-          <Person key={x} x={x} y={BASELINE} />
-        ))}
       </svg>
     </div>
   )

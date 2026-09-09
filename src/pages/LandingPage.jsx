@@ -1,17 +1,16 @@
+import { Link } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
 import { GoogleMark } from '@/components/auth/GoogleMark'
-import { CommunityBackdrop } from '@/components/decor/CommunityBackdrop'
-import { PALETTES } from './landingPalettes'
+import { loginWithGoogle } from '@/lib/authApi'
+import { paths } from '@/routes/paths'
+import { CommunityBackdrop, LinkedRings } from '@/components/decor/CommunityBackdrop'
+import { LANDING_VARS } from './landingPalettes'
 
-const DOMAINS = ['מרחב עבודה', 'מרחב קהילה', 'מרחב צריכה']
-
-export function LandingPage({ palette = 'petrol' }) {
-  const { vars } = PALETTES[palette] ?? PALETTES.petrol
+export function LandingPage() {
+  const google = useMutation({ mutationFn: loginWithGoogle })
 
   return (
-    <div
-      style={vars}
-      className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[var(--l-from)] via-[var(--l-via)] to-white"
-    >
+    <div style={LANDING_VARS} className="relative min-h-screen overflow-hidden bg-white">
       <CommunityBackdrop />
 
       <div className="relative mx-auto flex min-h-screen max-w-lg flex-col items-center px-6 py-14 text-center">
@@ -34,44 +33,55 @@ export function LandingPage({ palette = 'petrol' }) {
           </p>
         </div>
 
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
-          {DOMAINS.map((domain) => (
-            <span
-              key={domain}
-              className="rounded-full bg-white/80 px-4 py-1.5 text-[13px] font-medium text-[var(--l-primary)] ring-1 ring-[var(--l-ring)] backdrop-blur-sm"
+        {/* Sign-in card, encircled by the linked rings of people. */}
+        <div className="relative mt-24 w-full">
+          <LinkedRings className="absolute left-1/2 top-1/2 h-auto w-[200%] max-w-none -translate-x-1/2 -translate-y-1/2 sm:w-[132%]" />
+
+          <div className="relative rounded-2xl bg-white p-6 shadow-[0_1px_2px_rgba(14,46,28,0.06)] ring-1 ring-[var(--l-ring)]">
+            <div className="flex flex-col gap-3">
+              <Link
+                to={paths.register}
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[var(--l-primary)] text-[15px] font-semibold text-white transition-colors hover:bg-[var(--l-primary-hover)]"
+              >
+                הרשמה
+              </Link>
+              <Link
+                to={paths.login}
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[var(--l-soft)] text-[15px] font-semibold text-[var(--l-ink)] transition-colors hover:bg-[var(--l-soft-hover)]"
+              >
+                יש לי כבר חשבון
+              </Link>
+            </div>
+
+            <div className="my-5 flex items-center gap-3">
+              <span className="h-px flex-1 bg-[var(--l-ring)]" />
+              <span className="text-xs font-medium text-[var(--l-muted)]">או</span>
+              <span className="h-px flex-1 bg-[var(--l-ring)]" />
+            </div>
+
+            <button
+              type="button"
+              disabled={google.isPending}
+              onClick={() => google.mutate()}
+              className="inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-xl border border-[var(--l-ring)] bg-white text-[15px] font-medium text-slate-700 transition-colors hover:bg-[var(--l-via)] disabled:opacity-60"
             >
-              {domain}
-            </span>
-          ))}
+              <GoogleMark />
+              המשך עם Google
+            </button>
+
+            {google.error && (
+              <p role="alert" className="mt-3 text-xs text-red-700">
+                {google.error.message}
+              </p>
+            )}
+
+            <p className="mt-5 text-xs leading-relaxed text-[var(--l-muted)]">
+              הדיווחים אנונימיים. הזהות שלך לעולם אינה נשמרת לצד הדיווח.
+            </p>
+          </div>
         </div>
 
-        <div className="mt-12 w-full rounded-2xl bg-white/90 p-6 shadow-sm ring-1 ring-[var(--l-ring)] backdrop-blur-sm">
-          <div className="flex flex-col gap-3">
-            <button className="h-12 w-full rounded-xl bg-[var(--l-primary)] text-[15px] font-semibold text-white transition-colors hover:bg-[var(--l-primary-hover)]">
-              הרשמה
-            </button>
-            <button className="h-12 w-full rounded-xl bg-[var(--l-soft)] text-[15px] font-semibold text-[var(--l-ink)] transition-colors hover:bg-[var(--l-soft-hover)]">
-              יש לי כבר חשבון
-            </button>
-          </div>
-
-          <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-[var(--l-ring)]" />
-            <span className="text-xs font-medium text-[var(--l-muted)]">או</span>
-            <span className="h-px flex-1 bg-[var(--l-ring)]" />
-          </div>
-
-          <button className="inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-xl border border-[var(--l-ring)] bg-white text-[15px] font-medium text-slate-700 transition-colors hover:bg-[var(--l-via)]">
-            <GoogleMark />
-            המשך עם Google
-          </button>
-
-          <p className="mt-5 text-xs leading-relaxed text-[var(--l-muted)]">
-            הדיווחים אנונימיים. הזהות שלך לעולם אינה נשמרת לצד הדיווח.
-          </p>
-        </div>
-
-        <p className="mt-auto pt-10 text-xs text-[var(--l-muted)]">
+        <p className="mt-auto pt-20 text-xs text-[var(--l-muted)]">
           תנאי שימוש
           <span className="mx-2 opacity-50">·</span>
           מדיניות פרטיות

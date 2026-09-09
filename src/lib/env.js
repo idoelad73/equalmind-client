@@ -7,6 +7,10 @@ import { z } from 'zod'
 const schema = z.object({
   VITE_API_URL: z.string().min(1).default('/api'),
   VITE_APP_NAME: z.string().min(1).default('Equalmind'),
+  // Optional at build time so the app still runs before Supabase is
+  // configured; lib/supabase.js reports a clear error if they are missing.
+  VITE_SUPABASE_URL: z.string().default(''),
+  VITE_SUPABASE_ANON_KEY: z.string().default(''),
 })
 
 const parsed = schema.safeParse(import.meta.env)
