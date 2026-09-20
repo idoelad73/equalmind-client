@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   Building2,
+  CheckCircle2,
   FileSpreadsheet,
   KeyRound,
   Loader2,
@@ -13,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
 import { OrgAutocomplete } from '@/components/ui/OrgAutocomplete'
+import { RosterUploadModal } from '@/components/org/RosterUploadModal'
 import { paths } from '@/routes/paths'
 import { fieldErrors } from '@/schemas/auth'
 import { EMPLOYEE_CSV, orgOnboardingSchema } from '@/schemas/orgAdmin'
@@ -54,6 +57,8 @@ export function InviteAcceptPage() {
   const [errors, setErrors] = useState({})
   const [csv, setCsv] = useState(null)
   const [csvError, setCsvError] = useState(null)
+  const [done, setDone] = useState(null)
+  const [rosterOpen, setRosterOpen] = useState(false)
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -76,7 +81,7 @@ export function InviteAcceptPage() {
   const submit = useMutation({
     mutationFn: (details) =>
       completeOnboarding({ organizationId: context?.organizationId, details, csvFile: csv }),
-    onSuccess: () => navigate(paths.app, { replace: true }),
+    onSuccess: (result) => setDone(result),
   })
 
   function handleFile(file) {
@@ -97,6 +102,19 @@ export function InviteAcceptPage() {
     }
     setErrors({})
     submit.mutate(result.data)
+  }
+
+  if (done) {
+    return (
+      <Shell narrow>
+        <Completed
+          done={done}
+          onLoadRoster={() => setRosterOpen(true)}
+          onContinue={() => navigate(paths.app, { replace: true })}
+        />
+        <RosterUploadModal open={rosterOpen} onClose={() => setRosterOpen(false)} />
+      </Shell>
+    )
   }
 
   if (status === 'checking') {
@@ -235,7 +253,7 @@ export function InviteAcceptPage() {
               label="ח.פ/עוסק מורשה"
               name="companyNumber"
               dir="ltr"
-              inputMode="numeric"
+              readOnly
               placeholder="מתמלא אוטומטית מהמרשם"
               hint="מתקבל מהמרשם לפי הארגון שנבחר."
               value={form.companyNumber}
@@ -376,6 +394,71 @@ function Shell({ children, narrow }) {
         }`}
       >
         {children}
+      </div>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------- done */
+
+/**
+ * Onboarding finished. The roster result is shown here rather than on the
+ * next page, because this is the only moment the admin knows which file they
+ * just sent - a summary they land on later means nothing to them.
+ */
+function Completed({ done, onLoadRoster, onContinue }) {
+  const summary = done.roster?.summary
+  const skipped = done.roster?.skipped ?? []
+
+  return (
+    <div className="text-center">
+      <CheckCircle2
+        size={44}
+        className="mx-auto text-[var(--l-primary)]"
+        aria-hidden="true"
+      />
+
+      <h1 className="mt-4 text-2xl font-bold tracking-tight text-[var(--l-ink)]">
+        הארגון נוצר
+      </h1>
+      <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--l-muted)]">
+        החשבון שלך מוכן. אפשר לטעון רשימת עובדים עכשיו או בכל שלב מאוחר יותר,
+        מהתפריט העליון.
+      </p>
+
+      {summary && (
+        <div className="mt-5 rounded-xl bg-[var(--l-soft)]/60 px-4 py-3 text-sm text-[var(--l-ink)]">
+          נטענו {summary.added ?? 0} עובדים לרשימה
+          {skipped.length ? `, ${skipped.length} שורות דולגו` : ''}.
+        </div>
+      )}
+
+      {done.rosterError && (
+        <p className="mt-5 flex items-start gap-2 rounded-xl bg-amber-50 p-3.5 text-start text-sm leading-relaxed text-amber-900 ring-1 ring-amber-200">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>
+            הארגון נוצר, אך טעינת רשימת העובדים נכשלה: {done.rosterError} אפשר
+            לנסות שוב מהכפתור למטה.
+          </span>
+        </p>
+      )}
+
+      <div className="mt-7 flex flex-col gap-2.5">
+        <button
+          type="button"
+          onClick={onLoadRoster}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[var(--l-primary)] text-[15px] font-semibold text-white transition-colors hover:bg-[var(--l-primary-hover)]"
+        >
+          <FileSpreadsheet size={17} aria-hidden="true" />
+          {summary ? 'טעינת רשימה נוספת' : 'טען רשימת עובדים'}
+        </button>
+        <button
+          type="button"
+          onClick={onContinue}
+          className="inline-flex h-12 items-center justify-center rounded-xl border border-[var(--l-ring)] text-[15px] font-semibold text-[var(--l-ink)] transition-colors hover:bg-[var(--l-soft)]/50"
+        >
+          המשך לאפליקציה
+        </button>
       </div>
     </div>
   )

@@ -9,11 +9,12 @@ export const paths = {
   landing: '/',
   login: '/login',
   register: '/register',
-  orgRequest: '/register/organization',
   inviteAccept: '/invite/accept',
 
   app: '/app',
   space: (key = ':space') => `/app/space/${key}`,
+  reportDetails: (key = ':space', behaviorId = ':behaviorId') =>
+    `/app/space/${key}/report/${behaviorId}`,
   profile: '/app/profile',
   about: '/app/about',
   coach: '/app/coach',
@@ -23,6 +24,7 @@ export const paths = {
 /** Route segments, relative to the /app layout route. */
 export const appSegments = {
   space: 'space/:space',
+  reportDetails: 'space/:space/report/:behaviorId',
   profile: 'profile',
   about: 'about',
   coach: 'coach',

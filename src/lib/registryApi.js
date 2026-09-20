@@ -35,13 +35,49 @@ export async function saveAffiliation(organization) {
   return data.organization
 }
 
-/** The current user's profile row, including any declared workplace. */
+/**
+ * Attach by phone number, matched against a roster the employer uploaded.
+ *
+ * `matched: false` still saves the number - it is how we reach them later -
+ * it just means no roster mentions it.
+ */
+export async function claimByPhone(phone) {
+  const { data } = await api.post('/org/claim-phone', { phone })
+  return data
+}
+
+/** Attach with the organisation's join code. */
+export async function joinByCode(code) {
+  const { data } = await api.post('/org/join', { code })
+  return data
+}
+
+/** Detach from an organisation, however the link was made. */
+export async function clearAffiliation() {
+  const { data } = await api.delete('/org/affiliation')
+  return data.organization
+}
+
+/** The caller's own join code and roster counts. Org admins only. */
+export async function fetchJoinCode() {
+  const { data } = await api.get('/org/join-code')
+  return data
+}
+
+export async function rotateJoinCode() {
+  const { data } = await api.post('/org/join-code/rotate')
+  return data
+}
+
+/** The current user's profile row, including how it is linked. */
 export async function fetchMyProfile() {
   const { supabase } = await import('./supabase')
   if (!supabase) return null
   const { data } = await supabase
     .from('profiles')
-    .select('email, full_name, user_type, org_name, org_registry_id, org_registry_source')
+    .select(
+      'email, full_name, user_type, phone, org_name, org_registry_id, org_registry_source, org_source',
+    )
     .maybeSingle()
   return data ?? null
 }

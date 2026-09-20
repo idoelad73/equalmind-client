@@ -1,38 +1,6 @@
 import { api } from './api'
+import { uploadRoster } from './rosterApi'
 import { supabase, assertConfigured } from './supabase'
-
-const EMPLOYEE_LIST_BUCKET = 'employee-lists'
-
-/* ------------------------------------------------------------ public form */
-
-/**
- * Submit interest in registering an organisation.
- *
- * This creates no account and grants nothing. Organisation admins see the
- * reports about their organisation, so that role is never handed out by a
- * public form - it is granted by invitation after verification.
- *
- * It goes to our own API rather than straight to Supabase: the requests table
- * has no RLS policies at all, so the anon key cannot read or write it and the
- * queue cannot be scraped.
- */
-export async function submitOrgRequest(details) {
-  const { organization, ...rest } = details
-  const payload = {
-    ...rest,
-    orgName: organization?.name,
-    companyNumber: organization?.registryId ?? rest.companyNumber ?? undefined,
-    registrySource: organization?.source ?? undefined,
-  }
-  try {
-    const { data } = await api.post('/org/requests', payload)
-    return data
-  } catch (error) {
-    if (error?.status === 429) return Promise.reject(new Error('נשלחו יותר מדי בקשות. נסה/י שוב בעוד מספר דקות.'))
-    if (error?.status === 400) return Promise.reject(new Error('חלק מהפרטים אינם תקינים. יש לבדוק את השדות המסומנים.'))
-    return Promise.reject(new Error(error?.message ?? 'אירעה שגיאה בשליחת הבקשה. נסה/י שוב.'))
-  }
-}
 
 /* -------------------------------------------------------------- invitation */
 
@@ -49,7 +17,9 @@ export async function loadInviteContext() {
 
   const { data: membership } = await supabase
     .from('org_admins')
-    .select('organization_id, full_name, mobile, organizations(name, industry, company_number, address, employee_count)')
+    .select(
+      'organization_id, full_name, mobile, organizations(name, industry, registry_id, registry_source, address, employee_count)',
+    )
     .maybeSingle()
 
   const org = membership?.organizations ?? null
@@ -63,28 +33,19 @@ export async function loadInviteContext() {
       // Shaped for OrgAutocomplete. Only prefilled when we hold a registration
       // number, since a bare name is not a registry selection.
       organization:
-        org?.name && org?.company_number
+        org?.name && org?.registry_id
           ? {
               name: org.name,
-              registryId: org.company_number,
-              source: registrySourceFor(org.company_number),
+              registryId: org.registry_id,
+              source: org.registry_source,
             }
           : null,
       industry: org?.industry ?? '',
-      companyNumber: org?.company_number ?? '',
+      companyNumber: org?.registry_id ?? '',
       orgAddress: org?.address ?? '',
       employeeCount: org?.employee_count == null ? '' : String(org.employee_count),
     },
   }
-}
-
-/**
- * Israeli registration numbers are self-describing: עמותות are allocated the
- * 58 block, companies the 51-57 blocks. Enough to label a prefilled value
- * without a second lookup.
- */
-function registrySourceFor(id) {
-  return String(id).startsWith('58') ? 'nonprofits' : 'companies'
 }
 
 /**
@@ -115,9 +76,6 @@ export async function completeOnboarding({ organizationId, details, csvFile }) {
     )
   }
 
-  let employeeList = null
-  if (csvFile) employeeList = await uploadEmployeeList(userId, csvFile)
-
   const { error: saveError } = await supabase.from('org_admin_details').upsert(
     {
       user_id: userId,
@@ -130,10 +88,8 @@ export async function completeOnboarding({ organizationId, details, csvFile }) {
       registry_source: rest.organization?.source ?? null,
       org_address: rest.orgAddress ?? null,
       industry: rest.industry,
-      company_number: rest.companyNumber ?? null,
       employee_count: rest.employeeCount ?? null,
       extra_notes: rest.extraNotes ?? null,
-      employee_list: employeeList,
     },
     { onConflict: 'user_id' },
   )
@@ -145,28 +101,41 @@ export async function completeOnboarding({ organizationId, details, csvFile }) {
     )
   }
 
-  // Best effort - org_admins has no UPDATE policy for end users.
+  // Not best-effort: this is what creates the organisation and attaches the
+  // admin to it. Skipping it leaves them holding the role with nothing to
+  // administer - no dashboard, no roster, no join code.
+  // Distinct from the `organizationId` argument, which is whatever the
+  // invitation already knew (usually nothing). This is the row activation
+  // just created or reused.
+  let createdOrganizationId
   try {
-    await api.post('/org/activate', {})
-  } catch {
-    // The account works; the timestamp can wait.
+    const { data } = await api.post('/org/activate', {})
+    createdOrganizationId = data.organizationId
+  } catch (error) {
+    throw new Error(
+      'הפרטים נשמרו, אך יצירת הארגון נכשלה. יש להתחבר שוב כדי להשלים. ' +
+        `(${error?.message ?? 'שגיאה לא ידועה'})`,
+    )
   }
 
-  return true
-}
-
-async function uploadEmployeeList(userId, file) {
-  const path = `${userId}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, '_').slice(-80)}`
-
-  const { error } = await supabase.storage
-    .from(EMPLOYEE_LIST_BUCKET)
-    .upload(path, file, { contentType: 'text/csv', upsert: false })
-
-  if (error) {
-    // Losing an optional attachment should not fail onboarding.
-    console.error('[orgAdmin] employee list upload failed:', error.message)
-    return null
+  // The roster can only be imported now: it needs the organisation that
+  // activation just created, and the membership that authorises the upload.
+  //
+  // The file itself is never stored. It is parsed, each number is hashed,
+  // and the numbers are discarded - which is the whole point, and why this
+  // no longer drops the raw CSV into a storage bucket.
+  let roster = null
+  let rosterError = null
+  if (csvFile) {
+    try {
+      roster = await uploadRoster(csvFile)
+    } catch (error) {
+      // Onboarding itself succeeded. A bad roster file is worth reporting,
+      // not worth undoing an account for - it can be loaded again later.
+      rosterError = error?.message ?? 'טעינת רשימת העובדים נכשלה.'
+    }
   }
 
-  return { bucket: EMPLOYEE_LIST_BUCKET, path, name: file.name, size: file.size }
+  return { organizationId: createdOrganizationId, roster, rosterError }
 }
+

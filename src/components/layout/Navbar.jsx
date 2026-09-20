@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { HelpCircle, Home, LogOut, Menu, UserRound, X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { FileSpreadsheet, HelpCircle, Home, LogOut, Menu, UserRound, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { paths } from '@/routes/paths'
 import { logout } from '@/lib/authApi'
+import { fetchMyProfile } from '@/lib/registryApi'
+import { RosterUploadModal } from '@/components/org/RosterUploadModal'
 import { useAuthStore } from '@/store/authStore'
 
 const NAV = [
@@ -25,6 +28,13 @@ export function Navbar() {
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
   const [open, setOpen] = useState(false)
+  const [rosterOpen, setRosterOpen] = useState(false)
+
+  // Same queryKey as the profile page, so this is a cache hit there and back.
+  // The button is a convenience only - every roster route is gated server
+  // side by requireOrgAdmin, so hiding it is not what protects anything.
+  const profile = useQuery({ queryKey: ['profile'], queryFn: fetchMyProfile })
+  const isOrgAdmin = profile.data?.user_type === 'org_admin'
 
   async function handleSignOut() {
     setOpen(false)
@@ -58,6 +68,17 @@ export function Navbar() {
             <span className="hidden max-w-[20ch] truncate text-xs text-slate-500 lg:inline">
               {user.email}
             </span>
+          )}
+
+          {isOrgAdmin && (
+            <button
+              type="button"
+              onClick={() => setRosterOpen(true)}
+              className="hidden items-center gap-2 rounded-full bg-[var(--l-soft)] px-3.5 py-2 text-sm font-semibold text-[var(--l-primary)] transition-colors hover:bg-[var(--l-soft-hover)] md:inline-flex"
+            >
+              <FileSpreadsheet size={16} aria-hidden="true" />
+              טען רשימת עובדים
+            </button>
           )}
 
           <button
@@ -102,6 +123,20 @@ export function Navbar() {
             </NavLink>
           ))}
 
+          {isOrgAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setRosterOpen(true)
+              }}
+              className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-start text-sm font-semibold text-[var(--l-primary)] transition-colors hover:bg-[var(--l-soft)]"
+            >
+              <FileSpreadsheet size={16} aria-hidden="true" />
+              טען רשימת עובדים
+            </button>
+          )}
+
           <span className="my-2 h-px bg-[var(--l-ring)]" />
 
           {user?.email && (
@@ -119,6 +154,8 @@ export function Navbar() {
           </button>
         </nav>
       </div>
+
+      <RosterUploadModal open={rosterOpen} onClose={() => setRosterOpen(false)} />
     </header>
   )
 }

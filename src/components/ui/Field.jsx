@@ -16,6 +16,7 @@ export function Field({
   autoComplete,
   inputMode,
   dir,
+  readOnly = false,
   as = 'input',
   rows = 4,
   onChange,
@@ -37,6 +38,7 @@ export function Field({
         id={id}
         name={name}
         {...(as === 'input' ? { type } : { rows })}
+        readOnly={readOnly}
         dir={dir}
         inputMode={inputMode}
         autoComplete={autoComplete}

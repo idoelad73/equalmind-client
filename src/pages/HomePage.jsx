@@ -9,7 +9,7 @@ export function HomePage() {
     <section className="flex flex-col gap-10">
       <header className="text-center">
         <h1 className="text-[clamp(1.75rem,5vw,2.25rem)] font-extrabold tracking-tight text-[var(--l-ink)]">
-          יצירת <bdi>HOOK</bdi> חדש
+          יצירת דיווח חדש
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-[16px] leading-relaxed text-[var(--l-muted)]">
           בחר/י את המרחב שבו התרחשה ההתנהגות שברצונך לדווח עליה.
@@ -57,7 +57,7 @@ export function HomePage() {
       </ul>
 
       <p className="mx-auto max-w-lg text-center text-xs leading-relaxed text-[var(--l-muted)]">
-        ה-<bdi>HOOK</bdi> שלך אנונימי לחלוטין — איש לא יידע מי תרם אותו.
+        הדיווח שלך אנונימי כלפי הארגון — איש שם לא יידע מי תרם אותו.
       </p>
     </section>
   )

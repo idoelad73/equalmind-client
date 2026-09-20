@@ -1,12 +1,14 @@
 import { Briefcase, ShoppingBag, Users } from 'lucide-react'
 
 /**
- * The three spaces a HOOK can belong to. Ordered as the user reads them,
- * right to left. `key` is what appears in the URL and, later, in the database.
+ * The three spaces a report can belong to. Ordered as the user reads them,
+ * right to left. `key` is what appears in the URL and in the database;
+ * `possessive` is the wizard heading, which needs the definite article.
  */
 export const SPACES = [
   {
     key: 'work',
+    possessive: 'במרחב העבודה שלי',
     label: 'מרחב עבודה',
     description: 'התנהגויות במקום העבודה',
     icon: Briefcase,
@@ -14,6 +16,7 @@ export const SPACES = [
   },
   {
     key: 'community',
+    possessive: 'במרחב הקהילה שלי',
     label: 'מרחב קהילה',
     description: 'התנהגויות במרחב הציבורי',
     icon: Users,
@@ -21,6 +24,7 @@ export const SPACES = [
   },
   {
     key: 'consumption',
+    possessive: 'במרחב הצריכה שלי',
     label: 'מרחב צריכה',
     description: 'חוויות עם עסקים',
     icon: ShoppingBag,

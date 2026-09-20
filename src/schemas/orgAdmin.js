@@ -17,44 +17,11 @@ const optionalText = (max = 200) =>
     .transform((value) => (value === '' ? undefined : value))
 
 /**
- * Interest in registering an organisation.
- *
- * No password: this form does not create an account. Organisation admins are
- * invited after verification, so there is nothing here to sign in with.
- */
-export const orgRequestSchema = z.object({
-  fullName: z.string().trim().min(2, 'נא להזין שם מלא').max(100),
-  mobile: mobileSchema,
-  contactEmail: emailSchema,
-
-  organization: z
-    .object({
-      name: z.string().trim().min(2),
-      registryId: z.string().min(3),
-      source: z.enum(['companies', 'nonprofits']),
-      city: z.string().nullable().optional(),
-      status: z.string().nullable().optional(),
-    })
-    .nullable()
-    .refine((v) => v !== null && Boolean(v.registryId), {
-      message: 'יש לבחור ארגון מתוך המרשם',
-    }),
-  orgAddress: optionalText(250),
-  industry: z.string().trim().min(2, 'נא להזין ענף או סוג עיסוק').max(120),
-  companyNumber: optionalText(30),
-  employeeCount: z
-    .union([z.literal(''), z.coerce.number().int().min(0).max(1_000_000)])
-    .optional()
-    .transform((value) => (value === '' || value === undefined ? undefined : value)),
-  extraNotes: optionalText(1000),
-})
-
-/**
  * The onboarding form an invited admin completes.
  *
- * Same organisation fields as the public request form, plus the admin's own
- * details and a password - the account exists from the invitation but has no
- * password until this is submitted.
+ * The admin's own details, the organisation they declare, and a password -
+ * the account exists from the invitation but has no password until this is
+ * submitted.
  */
 export const orgOnboardingSchema = z
   .object({

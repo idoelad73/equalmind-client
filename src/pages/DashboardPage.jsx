@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { JoinCodePanel } from '@/components/org/JoinCodePanel'
 
 // Placeholder figures so the chart renders while the API is being built.
 const SAMPLE = [
@@ -24,6 +25,8 @@ export function DashboardPage() {
           נתוני דוגמה — יוחלפו בנתונים מהשרת.
         </p>
       </div>
+
+      <JoinCodePanel />
 
       <div className="h-72 rounded-lg border border-slate-200 bg-white p-4">
         <ResponsiveContainer width="100%" height="100%">

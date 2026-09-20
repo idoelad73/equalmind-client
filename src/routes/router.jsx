@@ -4,11 +4,11 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { HomePage } from '@/pages/HomePage'
 import { SpacePage } from '@/pages/SpacePage'
+import { ReportDetailsPage } from '@/pages/ReportDetailsPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { AboutPage } from '@/pages/AboutPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { LandingPage } from '@/pages/LandingPage'
-import { OrgRequestPage } from '@/pages/OrgRequestPage'
 import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
@@ -42,7 +42,6 @@ export const router = createBrowserRouter([
   { path: paths.landing, element: publicOnly(<LandingPage />) },
   { path: paths.login, element: publicOnly(<AuthPage mode="login" />) },
   { path: paths.register, element: publicOnly(<AuthPage mode="register" />) },
-  { path: paths.orgRequest, element: publicOnly(<OrgRequestPage />) },
 
   // NOT publicOnly: an invitee arrives already holding a session, and that
   // guard would bounce them into the app before they set a password.
@@ -58,6 +57,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: appSegments.space, element: <SpacePage /> },
+      { path: appSegments.reportDetails, element: <ReportDetailsPage /> },
       { path: appSegments.profile, element: <ProfilePage /> },
       { path: appSegments.about, element: <AboutPage /> },
       {

@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Building2, Check, Loader2, Mail, ShieldCheck, UserRound } from 'lucide-react'
-import { OrgAutocomplete } from '@/components/ui/OrgAutocomplete'
-import { fetchMyProfile, saveAffiliation } from '@/lib/registryApi'
+import { useQuery } from '@tanstack/react-query'
+import { Mail, ShieldCheck, Smartphone, UserRound } from 'lucide-react'
+import { OrgLinkCard } from '@/components/org/OrgLinkCard'
+import { fetchMyProfile } from '@/lib/registryApi'
 import { useAuthStore } from '@/store/authStore'
 
 const PROVIDER_LABELS = {
@@ -20,28 +19,6 @@ export function ProfilePage() {
 
   const profile = useQuery({ queryKey: ['profile'], queryFn: fetchMyProfile })
 
-  const [organization, setOrganization] = useState(null)
-  const [dirty, setDirty] = useState(false)
-
-  // Seed the picker once the stored affiliation arrives.
-  useEffect(() => {
-    const p = profile.data
-    if (!p?.org_name) return
-    setOrganization({
-      name: p.org_name,
-      registryId: p.org_registry_id ?? null,
-      source: p.org_registry_source ?? null,
-    })
-  }, [profile.data])
-
-  const save = useMutation({
-    mutationFn: () => saveAffiliation(organization),
-    onSuccess: () => {
-      setDirty(false)
-      profile.refetch()
-    },
-  })
-
   return (
     <section className="flex max-w-2xl flex-col gap-8">
       <div>
@@ -57,65 +34,19 @@ export function ProfilePage() {
           value={PROVIDER_LABELS[user?.provider] ?? user?.provider ?? '—'}
         />
         <Row
+          icon={Smartphone}
+          label="מספר נייד"
+          value={profile.data?.phone ?? '—'}
+          ltr
+        />
+        <Row
           icon={ShieldCheck}
           label="סוג חשבון"
           value={TYPE_LABELS[profile.data?.user_type] ?? '—'}
         />
       </dl>
 
-      {/* Affiliation is optional and self-declared: it is never verified, and
-          nothing about it grants access. */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
-          <Building2 size={17} className="text-[var(--l-primary)]" aria-hidden="true" />
-          מקום העבודה שלי
-        </h2>
-        <p className="mt-1 text-sm leading-relaxed text-slate-600">
-          אופציונלי. עוזר לנו לשייך דיווחים למרחב הנכון. אפשר לשנות או להסיר בכל עת.
-        </p>
-
-        <div className="mt-4">
-          {profile.isPending ? (
-            <p className="text-sm text-slate-500">טוען…</p>
-          ) : (
-            <OrgAutocomplete
-              label="ארגון"
-              value={organization}
-              allowManual
-              hint="אפשר לבחור מהמרשם או להקליד שם חופשי."
-              onChange={(next) => {
-                setOrganization(next)
-                setDirty(true)
-              }}
-            />
-          )}
-        </div>
-
-        {save.error && (
-          <p role="alert" className="mt-3 text-sm text-red-700">
-            שמירת הארגון נכשלה. נסה/י שוב.
-          </p>
-        )}
-
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            type="button"
-            disabled={!dirty || save.isPending}
-            onClick={() => save.mutate()}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[var(--l-primary)] px-5 text-sm font-semibold text-white transition-colors hover:bg-[var(--l-primary-hover)] disabled:opacity-50"
-          >
-            {save.isPending && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
-            שמירה
-          </button>
-
-          {!dirty && save.isSuccess && (
-            <span className="inline-flex items-center gap-1 text-sm text-[var(--l-primary)]">
-              <Check size={15} aria-hidden="true" />
-              נשמר
-            </span>
-          )}
-        </div>
-      </div>
+      <OrgLinkCard profile={profile.data} onChanged={() => profile.refetch()} />
 
       <p className="flex items-start gap-2 text-xs leading-relaxed text-slate-500">
         <ShieldCheck
@@ -124,8 +55,8 @@ export function ProfilePage() {
           aria-hidden="true"
         />
         <span>
-          הדיווחים שלך אינם נשמרים לצד החשבון הזה. אין דרך לקשר בין דיווח לבין
-          המשתמש שכתב אותו — גם לא מתוך מסד הנתונים.
+          הדיווחים שלך אנונימיים כלפי הארגון. מנהל.ת המערכת הארגונית רואה
+          את תוכן הדיווח בלבד, לעולם לא מי שלח אותו.
         </span>
       </p>
     </section>
