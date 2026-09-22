@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Field } from '@/components/ui/Field'
 import { OrgAutocomplete } from '@/components/ui/OrgAutocomplete'
+import { SmsTemplateField } from '@/components/org/SmsTemplateField'
 import { RosterUploadModal } from '@/components/org/RosterUploadModal'
 import { paths } from '@/routes/paths'
 import { fieldErrors } from '@/schemas/auth'
@@ -30,6 +31,7 @@ const EMPTY = {
   confirmPassword: '',
   organization: null,
   orgAddress: '',
+  inviteSmsTemplate: '',
   industry: '',
   companyNumber: '',
   employeeCount: '',
@@ -259,6 +261,14 @@ export function InviteAcceptPage() {
               value={form.companyNumber}
               error={errors.companyNumber}
               onChange={set('companyNumber')}
+            />
+            <SmsTemplateField
+              label="הודעת ההזמנה לעובדים (אופציונלי)"
+              value={form.inviteSmsTemplate}
+              error={errors.inviteSmsTemplate}
+              organizationName={form.organization?.name ?? 'הארגון'}
+              hint="ההודעה שתישלח ב-SMS לעובדים שיוזמנו להירשם. אפשר להשאיר ריק ולערוך בהמשך."
+              onChange={set('inviteSmsTemplate')}
             />
             <Field
               label="מספר עובדים ועובדות"

@@ -13,6 +13,10 @@ export async function fetchRoster() {
   return data
 }
 
+/**
+ * Import a roster. This never sends anything - inviting is a separate,
+ * reviewed step, so that a CSV upload can never quietly message people.
+ */
 export async function uploadRoster(file, onProgress) {
   const form = new FormData()
   form.append('file', file)
@@ -54,4 +58,29 @@ export function inspectCsvHeader(text) {
   )
 
   return { columns, hasPhone, hasName }
+}
+
+/* ------------------------------------------------------------ invitations */
+
+/** The organisation's invitation text, with the rendered preview and cost. */
+export async function fetchTemplate() {
+  const { data } = await api.get('/org/template')
+  return data
+}
+
+/** `null` clears it, falling back to the built-in default. */
+export async function saveTemplate(template) {
+  const { data } = await api.put('/org/template', { template })
+  return data
+}
+
+/**
+ * Invite roster members who have not registered.
+ *
+ * `dryRun` defaults to true on the server too: when the action reaches real
+ * phones, the ambiguous call should be the harmless one.
+ */
+export async function notifyRoster({ dryRun = true, resend = false } = {}) {
+  const { data } = await api.post('/org/roster/notify', { dryRun, resend })
+  return data
 }

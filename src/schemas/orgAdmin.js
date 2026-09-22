@@ -53,6 +53,9 @@ export const orgOnboardingSchema = z
       .optional()
       .transform((value) => (value === '' || value === undefined ? undefined : value)),
     extraNotes: optionalText(1000),
+    // The SMS invitation text. 280 characters is four Hebrew segments,
+    // which the database also enforces.
+    inviteSmsTemplate: optionalText(280),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'הסיסמאות אינן תואמות',

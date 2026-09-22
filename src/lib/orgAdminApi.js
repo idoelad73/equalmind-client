@@ -90,6 +90,7 @@ export async function completeOnboarding({ organizationId, details, csvFile }) {
       industry: rest.industry,
       employee_count: rest.employeeCount ?? null,
       extra_notes: rest.extraNotes ?? null,
+      invite_sms_template: rest.inviteSmsTemplate ?? null,
     },
     { onConflict: 'user_id' },
   )

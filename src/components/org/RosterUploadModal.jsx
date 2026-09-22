@@ -11,12 +11,14 @@ import {
   Download,
   FileSpreadsheet,
   Loader2,
+  MessageSquare,
   ShieldCheck,
   Upload,
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { fetchRoster, inspectCsvHeader, uploadRoster } from '@/lib/rosterApi'
+import { LANDING_VARS } from '@/pages/landingPalettes'
 
 const TEMPLATE = '﻿full_name,phone\n"דנה כהן",050-1234567\n"יוסי לוי",052-1234567\n'
 
@@ -35,19 +37,25 @@ const STATUS = {
  * this step is a confirmation, not a decision - but it is an explicit one,
  * because the upload attaches real people to an employer.
  */
-export function RosterUploadModal({ open, onClose }) {
+export function RosterUploadModal({ open, onClose, onRequestNotify }) {
   const [step, setStep] = useState('confirm')
   const [file, setFile] = useState(null)
   const [header, setHeader] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [notify, setNotify] = useState(false)
   const dialogRef = useRef(null)
 
   const roster = useQuery({ queryKey: ['roster'], queryFn: fetchRoster, enabled: open })
 
   const upload = useMutation({
     mutationFn: () => uploadRoster(file, setProgress),
-    onSuccess: () => roster.refetch(),
+    onSuccess: (data) => {
+      roster.refetch()
+      // Hand straight over to the invitation dialog, where the wording and
+      // the recipient count get approved before anything is sent.
+      if (notify) onRequestNotify?.(data.summary)
+    },
   })
 
   // Reset between openings, so a previous result never shows over a new file
@@ -58,6 +66,7 @@ export function RosterUploadModal({ open, onClose }) {
     setFile(null)
     setHeader(null)
     setProgress(0)
+    setNotify(false)
     upload.reset()
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -96,8 +105,14 @@ export function RosterUploadModal({ open, onClose }) {
   // opens it has `backdrop-blur`, and a backdrop-filter makes an element a
   // containing block for fixed-position descendants - so inline, this dialog
   // centred itself against a 64px header instead of the viewport.
+  //
+  // The palette has to be re-applied here for the same reason: LANDING_VARS
+  // is set on the AppLayout element, and a portal escapes it. Without this,
+  // --l-primary is undefined, so the confirm button renders white-on-white
+  // and looks like it is not there at all.
   return createPortal(
     <div
+      style={LANDING_VARS}
       className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
@@ -244,6 +259,26 @@ export function RosterUploadModal({ open, onClose }) {
                       </button>
                     </div>
                   )}
+
+                  <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-white p-4 ring-1 ring-slate-200 transition-colors hover:ring-[var(--l-primary)]">
+                    <input
+                      type="checkbox"
+                      checked={notify}
+                      disabled={upload.isPending}
+                      onChange={(event) => setNotify(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--l-primary)]"
+                    />
+                    <span className="flex-1">
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-slate-900">
+                        <MessageSquare size={14} className="text-slate-400" aria-hidden="true" />
+                        מעבר לשליחת הזמנות לאחר הטעינה
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-slate-500">
+                        ייפתח חלון שבו אפשר לערוך את נוסח ההודעה ולאשר את השליחה.
+                        לא נשלחת הודעה ללא אישור.
+                      </span>
+                    </span>
+                  </label>
 
                   <div className="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
                     <div className="flex items-center justify-between gap-2">
@@ -491,3 +526,4 @@ function Results({ result, onAnother }) {
     </div>
   )
 }
+

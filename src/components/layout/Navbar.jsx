@@ -7,6 +7,7 @@ import { paths } from '@/routes/paths'
 import { logout } from '@/lib/authApi'
 import { fetchMyProfile } from '@/lib/registryApi'
 import { RosterUploadModal } from '@/components/org/RosterUploadModal'
+import { NotifyModal } from '@/components/org/NotifyModal'
 import { useAuthStore } from '@/store/authStore'
 
 const NAV = [
@@ -29,6 +30,9 @@ export function Navbar() {
   const user = useAuthStore((state) => state.user)
   const [open, setOpen] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
+  const [notifyOpen, setNotifyOpen] = useState(false)
+  // Carried across so the invitation dialog can say what was just imported.
+  const [imported, setImported] = useState(null)
 
   // Same queryKey as the profile page, so this is a cache hit there and back.
   // The button is a convenience only - every roster route is gated server
@@ -155,7 +159,24 @@ export function Navbar() {
         </nav>
       </div>
 
-      <RosterUploadModal open={rosterOpen} onClose={() => setRosterOpen(false)} />
+      <RosterUploadModal
+        open={rosterOpen}
+        onClose={() => setRosterOpen(false)}
+        onRequestNotify={(summary) => {
+          setImported(summary)
+          setRosterOpen(false)
+          setNotifyOpen(true)
+        }}
+      />
+
+      <NotifyModal
+        open={notifyOpen}
+        imported={imported}
+        onClose={() => {
+          setNotifyOpen(false)
+          setImported(null)
+        }}
+      />
     </header>
   )
 }

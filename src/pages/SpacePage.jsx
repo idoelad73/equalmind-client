@@ -5,7 +5,9 @@ import {
   Armchair,
   Building2,
   ChevronLeft,
+  ChevronRight,
   CircleAlert,
+  Image as ImageIcon,
   Loader2,
   Search,
   Tag,
@@ -24,6 +26,7 @@ const CATEGORY_ICONS = {
   public_spaces: Users,
   physical_infrastructure: Armchair,
   municipal_services: Building2,
+  sexist_content: ImageIcon,
 }
 
 /** Steps one and two: pick a category, then a behaviour within it. */
@@ -185,9 +188,23 @@ function BehaviorStep({ title, space, category, behaviors, onBack, onPick }) {
     }))
   }, [behaviors, category?.key, query])
 
+  const shown = groups.reduce((total, group) => total + group.items.length, 0)
+
   return (
     <WizardShell title={title} step={2} backTo={paths.space(space.key)} backLabel="חזרה">
       <WizardCard>
+        {/* In-card, not only in the header: once the list is scrolled the
+            header arrow is off screen, and the way back should be wherever
+            the reader's attention already is. */}
+        <button
+          type="button"
+          onClick={onBack}
+          className="-mt-1 mb-3 inline-flex items-center gap-1 rounded-lg py-1 text-sm font-semibold text-[var(--l-primary)] transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--l-primary)]"
+        >
+          <ChevronRight size={15} aria-hidden="true" />
+          כל הקטגוריות
+        </button>
+
         <div className="text-center">
           <h2 className="text-xl font-bold text-[var(--l-ink)]">
             {query ? 'כל ההתנהגויות' : (category?.label ?? 'כל ההתנהגויות')}
@@ -225,29 +242,73 @@ function BehaviorStep({ title, space, category, behaviors, onBack, onPick }) {
             </button>
           </p>
         ) : (
-          <div className="mt-5 flex flex-col gap-5">
-            {groups.map((group) => (
-              <section key={group.key}>
-                <h3 className="rounded-lg bg-[var(--l-soft)]/70 px-3 py-2 text-sm font-bold text-[var(--l-ink)]">
-                  {group.label}
-                </h3>
+          <>
+            <p className="mt-3 text-xs text-[var(--l-muted)]">
+              {shown === 1 ? 'התנהגות אחת' : `${shown} התנהגויות`}
+              {query ? ' תואמות לחיפוש' : ''}
+            </p>
 
-                <ul className="mt-2 flex flex-col gap-2">
-                  {group.items.map((behavior) => (
-                    <li key={behavior.id}>
-                      <button
-                        type="button"
-                        onClick={() => onPick(behavior)}
-                        className="w-full rounded-xl border border-[var(--l-ring)] bg-white px-4 py-3.5 text-start text-[15px] leading-relaxed text-[var(--l-ink)] transition-all hover:-translate-y-0.5 hover:border-[var(--l-primary)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--l-primary)]"
-                      >
-                        {behavior.name}
-                      </button>
-                    </li>
+            {/*
+              The list scrolls inside the card rather than growing it. With
+              the whole space searchable from one box, the results can be
+              long, and a page that grows takes the search box off screen -
+              so the next search means scrolling back up to reach it.
+
+              Not pagination: pages would make you hunt through them for a
+              behaviour, which is the job the search box already does.
+            */}
+            <div className="relative mt-2">
+              <div className="max-h-[50vh] overflow-y-auto overscroll-contain pb-2">
+                <div className="flex flex-col gap-5">
+                  {groups.map((group) => (
+                    <section key={group.key}>
+                      {/* Sticky, so you can always see which category you
+                          are looking at while scrolling a long result set. */}
+                      <h3 className="sticky top-0 z-10 rounded-lg bg-[var(--l-soft)] px-3 py-2 text-sm font-bold text-[var(--l-ink)] shadow-[0_1px_0_rgba(14,46,28,0.06)]">
+                        {group.label}
+                      </h3>
+
+                      <ul className="mt-2 flex flex-col gap-2">
+                        {group.items.map((behavior) => (
+                          <li key={behavior.id}>
+                            <button
+                              type="button"
+                              onClick={() => onPick(behavior)}
+                              className="w-full rounded-xl border border-[var(--l-ring)] bg-white px-4 py-3.5 text-start text-[15px] leading-relaxed text-[var(--l-ink)] transition-all hover:-translate-y-0.5 hover:border-[var(--l-primary)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--l-primary)]"
+                            >
+                              {behavior.name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                   ))}
-                </ul>
-              </section>
-            ))}
-          </div>
+                </div>
+              </div>
+
+              {/* A hint that the list continues. pointer-events-none so it
+                  never swallows a click on the row underneath it. */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-white to-transparent"
+              />
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--l-ring)] pt-4">
+              <button
+                type="button"
+                onClick={onBack}
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-[var(--l-ring)] px-3.5 text-sm font-semibold text-[var(--l-ink)] transition-colors hover:border-[var(--l-primary)] hover:bg-[var(--l-soft)]/40"
+              >
+                <ChevronRight size={15} aria-hidden="true" />
+                חזרה לקטגוריות
+              </button>
+
+              <span className="text-xs text-[var(--l-muted)]">
+                לא מצאת? נסה/י לחפש במילים אחרות
+              </span>
+            </div>
+          </>
         )}
       </WizardCard>
     </WizardShell>
