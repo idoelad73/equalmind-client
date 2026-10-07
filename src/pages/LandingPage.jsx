@@ -28,7 +28,7 @@ export function LandingPage() {
             אפשר להגיד בקול
           </h1>
           <p className="mx-auto mt-5 max-w-md text-[17px] leading-relaxed text-[var(--l-muted)]">
-            דיווח אנונימי על ביטויי אי־שוויון חברתי — כדי שדפוסים חוזרים יקבלו
+            <bdi>Hook</bdi> אנונימי על ביטויי אי־שוויון חברתי — כדי שדפוסים חוזרים יקבלו
             שם, וארגונים יקבלו הזדמנות לתקן.
           </p>
         </div>
@@ -76,7 +76,7 @@ export function LandingPage() {
             )}
 
             <p className="mt-5 text-xs leading-relaxed text-[var(--l-muted)]">
-              הדיווחים אנונימיים. הזהות שלך לא נחשפת לארגון ולא למי שדווח עליו.
+              ה-<bdi>Hooks</bdi> אנונימיים. הזהות שלך לא נחשפת לארגון ולא למי שדווח עליו.
             </p>
           </div>
 

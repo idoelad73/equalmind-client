@@ -15,6 +15,7 @@ export const paths = {
   space: (key = ':space') => `/app/space/${key}`,
   reportDetails: (key = ':space', behaviorId = ':behaviorId') =>
     `/app/space/${key}/report/${behaviorId}`,
+  customReport: (key = ':space') => `/app/space/${key}/report/new`,
   profile: '/app/profile',
   about: '/app/about',
   coach: '/app/coach',
@@ -25,6 +26,8 @@ export const paths = {
 export const appSegments = {
   space: 'space/:space',
   reportDetails: 'space/:space/report/:behaviorId',
+  // Static, so React Router ranks it above :behaviorId - "new" is never an id.
+  customReport: 'space/:space/report/new',
   profile: 'profile',
   about: 'about',
   coach: 'coach',

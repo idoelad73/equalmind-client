@@ -20,7 +20,17 @@ import { cn } from '@/lib/utils'
 import { fetchRoster, inspectCsvHeader, uploadRoster } from '@/lib/rosterApi'
 import { LANDING_VARS } from '@/pages/landingPalettes'
 
-const TEMPLATE = '﻿full_name,phone\n"דנה כהן",050-1234567\n"יוסי לוי",052-1234567\n'
+// Opens straight in Excel (the BOM makes it read the Hebrew as UTF-8), and
+// the hyphenated numbers stay text there, so the leading 0 survives.
+const TEMPLATE =
+  '﻿שם,טלפון,מחלקה,תפקיד\n"דנה כהן",050-1234567,פיתוח,מהנדסת\n"יוסי לוי",052-1234567,,\n'
+
+const COLUMNS = [
+  { name: 'שם', required: true },
+  { name: 'טלפון', required: true, note: 'נייד ישראלי' },
+  { name: 'מחלקה', required: false },
+  { name: 'תפקיד', required: false },
+]
 
 const STATUS = {
   added: { label: 'נוסף', className: 'text-[var(--l-primary)]' },
@@ -86,7 +96,12 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
     upload.reset()
     setProgress(0)
     setFile(next ?? null)
-    setHeader(next ? inspectCsvHeader(await next.text()) : null)
+    if (!next) return setHeader(null)
+    // CSV headers are checked here for a fast answer; a workbook is checked
+    // by the server when it is loaded.
+    setHeader(
+      /\.xlsx$/i.test(next.name) ? { xlsx: true } : inspectCsvHeader(await next.text()),
+    )
   }
 
   function downloadTemplate() {
@@ -98,7 +113,10 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
     URL.revokeObjectURL(url)
   }
 
-  const headerBad = header && !header.hasPhone
+  const missing = header && !header.xlsx
+    ? [!header.hasName && 'שם', !header.hasPhone && 'טלפון'].filter(Boolean)
+    : []
+  const headerBad = missing.length > 0
   const result = upload.data
 
   // Rendered into <body>, not where it sits in the tree. The navbar that
@@ -215,12 +233,12 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
                   >
                     <Upload size={22} className="text-slate-400" aria-hidden="true" />
                     <span className="text-sm font-medium text-slate-700">
-                      גרור/י קובץ CSV לכאן, או לחץ/י לבחירה
+                      גרור/י קובץ אקסל או CSV לכאן, או לחץ/י לבחירה
                     </span>
-                    <span className="text-xs text-slate-500">עד 2MB</span>
+                    <span className="text-xs text-slate-500">xlsx או csv, עד 2MB</span>
                     <input
                       type="file"
-                      accept=".csv,text/csv"
+                      accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       className="sr-only"
                       disabled={upload.isPending}
                       onChange={(event) => pick(event.target.files?.[0])}
@@ -245,8 +263,10 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
                         </p>
                         <p className={cn('text-xs', headerBad ? 'text-red-700' : 'text-slate-500')}>
                           {headerBad
-                            ? 'לא נמצאה עמודת טלפון בשורת הכותרות.'
-                            : `עמודות: ${header?.columns.join(', ')}`}
+                            ? `חסרה עמודת ${missing.join(' ועמודת ')} בשורת הכותרות.`
+                            : header?.xlsx
+                              ? 'קובץ אקסל — העמודות ייבדקו בעת הטעינה.'
+                              : `עמודות: ${header?.columns.join(', ')}`}
                         </p>
                       </div>
                       <button
@@ -292,15 +312,30 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
                         הורדת תבנית
                       </button>
                     </div>
-                    <pre
-                      dir="ltr"
-                      className="mt-2 overflow-x-auto rounded-lg bg-white p-3 text-left font-mono text-[11px] leading-relaxed text-slate-600 ring-1 ring-slate-200"
-                    >{`full_name,phone
-"דנה כהן",050-1234567
-"יוסי לוי",052-1234567`}</pre>
+                    <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      {COLUMNS.map((column) => (
+                        <li
+                          key={column.name}
+                          className="rounded-lg bg-white px-2.5 py-2 text-center ring-1 ring-slate-200"
+                        >
+                          <span className="block text-sm font-semibold text-slate-800">
+                            {column.name}
+                          </span>
+                          <span
+                            className={cn(
+                              'block text-[11px]',
+                              column.required ? 'text-[var(--l-primary)]' : 'text-slate-400',
+                            )}
+                          >
+                            {column.required ? 'חובה' : 'אופציונלי'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
                     <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                      שתי עמודות בלבד. אין עמודת ארגון — הרשימה נטענת לארגון שאושר
-                      למעלה. מאקסל: קובץ ← שמירה בשם ← CSV UTF-8.
+                      שורה ראשונה עם שמות העמודות. שורה בלי שם או בלי מספר נייד
+                      תקין לא תיטען, והסיבה תוצג. אין עמודת ארגון — הרשימה נטענת
+                      לארגון שאושר למעלה.
                     </p>
                   </div>
 
@@ -310,9 +345,13 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
                       className="mt-0.5 shrink-0 text-[var(--l-primary)]"
                       aria-hidden="true"
                     />
+                    {/* Accurate since migration 015, which stores the number
+                        itself alongside its hash. The old wording ("encrypted
+                        only, unrecoverable") stopped being true there. */}
                     <span>
-                      מספרי הטלפון נשמרים אצלנו מוצפנים בלבד ואינם ניתנים לשחזור מתוך
-                      מסד הנתונים.
+                      הרשימה משמשת רק לשיוך עובדים לארגון ולשליחת הזמנות שאישרת.
+                      היא נגישה רק למנהלי הארגון ולצוות <bdi>Equalmind</bdi>, ואינה
+                      מוצגת למשתמשים אחרים.
                     </span>
                   </p>
 
@@ -499,7 +538,14 @@ function Results({ result, onAnother }) {
         <ul className="mt-3 max-h-48 divide-y divide-slate-100 overflow-y-auto rounded-xl ring-1 ring-slate-200">
           {results.map((row, index) => (
             <li key={index} className="flex items-center gap-2 px-3 py-2">
-              <span className="flex-1 truncate text-sm text-slate-800">{row.fullName ?? '—'}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-slate-800">{row.fullName ?? '—'}</span>
+                {(row.department || row.jobTitle) && (
+                  <span className="block truncate text-[11px] text-slate-500">
+                    {[row.department, row.jobTitle].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </span>
               <span className="shrink-0 font-mono text-xs text-slate-400" dir="ltr">
                 {row.masked}
               </span>

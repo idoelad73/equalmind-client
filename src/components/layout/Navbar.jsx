@@ -1,13 +1,24 @@
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { FileSpreadsheet, HelpCircle, Home, LogOut, Menu, UserRound, X } from 'lucide-react'
+import {
+  Building2,
+  FileSpreadsheet,
+  HelpCircle,
+  Home,
+  LogOut,
+  Menu,
+  UserRound,
+  X,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { paths } from '@/routes/paths'
 import { logout } from '@/lib/authApi'
 import { fetchMyProfile } from '@/lib/registryApi'
 import { RosterUploadModal } from '@/components/org/RosterUploadModal'
 import { NotifyModal } from '@/components/org/NotifyModal'
+import { MessagesBell } from '@/components/admin/MessagesBell'
+import { InviteRepresentativeModal } from '@/components/admin/InviteRepresentativeModal'
 import { useAuthStore } from '@/store/authStore'
 
 const NAV = [
@@ -31,6 +42,7 @@ export function Navbar() {
   const [open, setOpen] = useState(false)
   const [rosterOpen, setRosterOpen] = useState(false)
   const [notifyOpen, setNotifyOpen] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
   // Carried across so the invitation dialog can say what was just imported.
   const [imported, setImported] = useState(null)
 
@@ -39,6 +51,7 @@ export function Navbar() {
   // side by requireOrgAdmin, so hiding it is not what protects anything.
   const profile = useQuery({ queryKey: ['profile'], queryFn: fetchMyProfile })
   const isOrgAdmin = profile.data?.user_type === 'org_admin'
+  const isSystemAdmin = profile.data?.user_type === 'system_admin'
 
   async function handleSignOut() {
     setOpen(false)
@@ -68,10 +81,24 @@ export function Navbar() {
         </nav>
 
         <div className="ms-auto flex items-center gap-2">
+          {/* Renders nothing unless the server says this account is staff. */}
+          <MessagesBell />
+
           {user?.email && (
             <span className="hidden max-w-[20ch] truncate text-xs text-slate-500 lg:inline">
               {user.email}
             </span>
+          )}
+
+          {isSystemAdmin && (
+            <button
+              type="button"
+              onClick={() => setInviteOpen(true)}
+              className="hidden items-center gap-2 rounded-full border border-[var(--l-primary)] px-3.5 py-2 text-sm font-semibold text-[var(--l-primary)] transition-colors hover:bg-[var(--l-soft)] md:inline-flex"
+            >
+              <Building2 size={16} aria-hidden="true" />
+              הזמן נציג הארגון
+            </button>
           )}
 
           {isOrgAdmin && (
@@ -127,6 +154,20 @@ export function Navbar() {
             </NavLink>
           ))}
 
+          {isSystemAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setInviteOpen(true)
+              }}
+              className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-start text-sm font-semibold text-[var(--l-primary)] transition-colors hover:bg-[var(--l-soft)]"
+            >
+              <Building2 size={16} aria-hidden="true" />
+              הזמן נציג הארגון
+            </button>
+          )}
+
           {isOrgAdmin && (
             <button
               type="button"
@@ -168,6 +209,8 @@ export function Navbar() {
           setNotifyOpen(true)
         }}
       />
+
+      <InviteRepresentativeModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
 
       <NotifyModal
         open={notifyOpen}

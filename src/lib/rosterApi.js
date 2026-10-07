@@ -42,19 +42,24 @@ export async function clearRoster() {
 }
 
 /**
- * Read the header row in the browser, so an obviously wrong file is caught
- * before it is uploaded. The server validates properly regardless - this is
- * only to give a faster answer.
+ * Read a CSV's header row in the browser, so an obviously wrong file is
+ * caught before it is uploaded. The server validates properly regardless -
+ * this is only to give a faster answer. (An .xlsx is checked on the server
+ * only; reading one here would mean shipping a spreadsheet parser.)
+ *
+ * The column names mirror server/lib/rosterImport.js.
  */
 export function inspectCsvHeader(text) {
   const firstLine = text.replace(/^﻿/, '').split(/\r?\n/)[0] ?? ''
-  const columns = firstLine.split(',').map((c) => c.trim().replace(/^"|"$/g, '').toLowerCase())
+  const columns = firstLine
+    .split(',')
+    .map((c) => c.trim().replace(/^"|"$/g, '').trim().replace(/\s+/g, ' ').toLowerCase())
 
   const hasPhone = columns.some((c) =>
-    ['phone', 'mobile', 'employee_phone', 'טלפון', 'נייד'].includes(c),
+    ['phone', 'mobile', 'employee_phone', 'טלפון', 'נייד', 'טלפון נייד', 'מספר טלפון'].includes(c),
   )
   const hasName = columns.some((c) =>
-    ['full_name', 'name', 'employee_name', 'שם', 'שם מלא'].includes(c),
+    ['full_name', 'name', 'employee_name', 'שם', 'שם מלא', 'שם העובד', 'שם עובד'].includes(c),
   )
 
   return { columns, hasPhone, hasName }

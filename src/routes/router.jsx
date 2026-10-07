@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { HomePage } from '@/pages/HomePage'
 import { SpacePage } from '@/pages/SpacePage'
 import { ReportDetailsPage } from '@/pages/ReportDetailsPage'
+import { CustomReportPage } from '@/pages/CustomReportPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { AboutPage } from '@/pages/AboutPage'
 import { AuthPage } from '@/pages/AuthPage'
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: appSegments.space, element: <SpacePage /> },
+      { path: appSegments.customReport, element: <CustomReportPage /> },
       { path: appSegments.reportDetails, element: <ReportDetailsPage /> },
       { path: appSegments.profile, element: <ProfilePage /> },
       { path: appSegments.about, element: <AboutPage /> },

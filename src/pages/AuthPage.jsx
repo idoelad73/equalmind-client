@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowRight, Loader2, ShieldCheck } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { GoogleMark } from '@/components/auth/GoogleMark'
 import { OrgAutocomplete } from '@/components/ui/OrgAutocomplete'
+import { LocalityPicker } from '@/components/ui/LocalityPicker'
 import { loginSchema, registerSchema, fieldErrors } from '@/schemas/auth'
 import { login, register, loginWithGoogle } from '@/lib/authApi'
 import { useAuthStore } from '@/store/authStore'
@@ -38,7 +40,12 @@ export function AuthPage({ mode = 'login' }) {
     email: '',
     emailConfirm: '',
     password: '',
+    residence: null,
     organization: null,
+    fullName: '',
+    phone: '',
+    address: '',
+    gender: undefined,
   })
   const [errors, setErrors] = useState({})
 
@@ -62,8 +69,9 @@ export function AuthPage({ mode = 'login' }) {
       return
     }
     setErrors({})
-    const { email, password, organization } = result.data
-    submit.mutate({ email, password, organization })
+    // Login ignores everything past the credentials; register carries the
+    // rest through to signup metadata.
+    submit.mutate(result.data)
   }
 
   const busy = submit.isPending || google.isPending
@@ -127,13 +135,74 @@ export function AuthPage({ mode = 'login' }) {
           />
 
           {mode === 'register' && (
-            <OrgAutocomplete
-              label="מקום העבודה"
-              value={form.organization}
-              allowManual
-              hint="אופציונלי. עוזר לשייך דיווחים למרחב הנכון, וניתן לשנות בכל עת בפרופיל."
-              onChange={(organization) => setForm((f) => ({ ...f, organization }))}
-            />
+            <>
+              <LocalityPicker
+                label="מקום מגורים"
+                value={form.residence}
+                error={errors.residence}
+                placeholder="התחל/י להקליד שם יישוב…"
+                // The current position answers "where did this happen",
+                // not "where do you live", so no geolocation button here.
+                showDetect={false}
+                onChange={(residence) => setForm((f) => ({ ...f, residence }))}
+              />
+
+              <OrgAutocomplete
+                label="מקום העבודה"
+                value={form.organization}
+                allowManual
+                hint="אופציונלי. עוזר לשייך Hooks למרחב הנכון, וניתן לשנות בכל עת בפרופיל."
+                onChange={(organization) => setForm((f) => ({ ...f, organization }))}
+              />
+
+              <fieldset className="flex flex-col gap-4 rounded-xl border border-[var(--l-ring)] p-4">
+                <legend className="px-1.5 text-sm font-medium text-[var(--l-ink)]">
+                  פרטים נוספים{' '}
+                  <span className="font-normal text-[var(--l-muted)]">(אופציונלי)</span>
+                </legend>
+
+                <p className="-mt-1 text-xs leading-relaxed text-[var(--l-muted)]">
+                  אפשר לדלג על כולם. הם אינם נחשפים לארגון ואינם מופיעים לצד
+                  ה-<bdi>Hooks</bdi> — מספר נייד משמש לשיוך לארגון שלך ולעדכונים בעתיד.
+                </p>
+
+                <Field
+                  label="שם מלא"
+                  name="fullName"
+                  value={form.fullName}
+                  error={errors.fullName}
+                  autoComplete="name"
+                  onChange={(fullName) => setForm((f) => ({ ...f, fullName }))}
+                />
+
+                <Field
+                  label="מספר נייד"
+                  name="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={form.phone}
+                  error={errors.phone}
+                  hint="אם הארגון שלך העלה רשימת עובדים, המספר ישייך אותך אליו."
+                  onChange={(phone) => setForm((f) => ({ ...f, phone }))}
+                />
+
+                <Field
+                  label="כתובת"
+                  name="address"
+                  value={form.address}
+                  error={errors.address}
+                  autoComplete="street-address"
+                  onChange={(address) => setForm((f) => ({ ...f, address }))}
+                />
+
+                <GenderField
+                  value={form.gender}
+                  error={errors.gender}
+                  onChange={(gender) => setForm((f) => ({ ...f, gender }))}
+                />
+              </fieldset>
+            </>
           )}
 
           {failure && (
@@ -181,8 +250,8 @@ export function AuthPage({ mode = 'login' }) {
               aria-hidden="true"
             />
             <span>
-              הדיווחים שלך אנונימיים כלפי הארגון. הארגון לעולם לא יידע
-              מי שלח דיווח — וגם לא מי שדווח עליו.
+              ה-<bdi>Hooks</bdi> שלך אנונימיים כלפי הארגון. הארגון לעולם לא יידע
+              מי שלח <bdi>Hook</bdi> — וגם לא מי שדווח עליו.
             </span>
           </p>
         )}
@@ -230,5 +299,70 @@ function Field({ label, name, type = 'text', value, error, hint, autoComplete, i
         </span>
       ) : null}
     </label>
+  )
+}
+
+/* --------------------------------------------------------------- gender */
+
+const GENDERS = [
+  { value: 'female', label: 'נקבה' },
+  { value: 'male', label: 'זכר' },
+  { value: 'not_relevant', label: 'לא רלוונטי' },
+]
+
+/**
+ * Radios rather than a select: three options, all of which should be visible
+ * without opening anything. "לא רלוונטי" is a real answer and sits level with
+ * the other two - it is not the absence of one. Leaving the whole group
+ * untouched is what means "did not say", which is why none is preselected.
+ */
+function GenderField({ value, error, onChange }) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-medium text-[var(--l-ink)]">מגדר</legend>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        {GENDERS.map((option) => {
+          const selected = value === option.value
+          return (
+            <label
+              key={option.value}
+              className={cn(
+                'inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3.5 py-2 text-sm transition-colors',
+                selected
+                  ? 'border-[var(--l-primary)] bg-[var(--l-soft)] font-semibold text-[var(--l-primary)]'
+                  : 'border-[var(--l-ring)] text-[var(--l-ink)] hover:bg-[var(--l-soft)]/40',
+              )}
+            >
+              <input
+                type="radio"
+                name="gender"
+                value={option.value}
+                checked={selected}
+                onChange={() => onChange(option.value)}
+                className="h-3.5 w-3.5 accent-[var(--l-primary)]"
+              />
+              {option.label}
+            </label>
+          )
+        })}
+
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className="text-sm text-[var(--l-muted)] underline-offset-2 hover:underline"
+          >
+            ניקוי
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <p role="alert" className="mt-1 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+    </fieldset>
   )
 }

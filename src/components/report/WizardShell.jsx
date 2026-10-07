@@ -12,8 +12,11 @@ export const WIZARD_STEPS = 3
  *
  * The negative margins undo the AppLayout padding so the backdrop reaches the
  * edges, the same way the about page does it.
+ *
+ * A page outside the three numbered steps (the custom Hook form) passes a
+ * `subtitle` instead of a `step`, and gets no progress bar.
  */
-export function WizardShell({ title, step, backTo, backLabel = 'חזרה', children }) {
+export function WizardShell({ title, step, subtitle, backTo, backLabel = 'חזרה', children }) {
   return (
     <div
       style={LANDING_VARS}
@@ -38,7 +41,7 @@ export function WizardShell({ title, step, backTo, backLabel = 'חזרה', child
               {title}
             </h1>
             <p className="mt-1 text-sm text-[var(--l-muted)]">
-              שלב {step} מתוך {WIZARD_STEPS}
+              {step ? `שלב ${step} מתוך ${WIZARD_STEPS}` : subtitle}
             </p>
           </div>
 
@@ -46,7 +49,7 @@ export function WizardShell({ title, step, backTo, backLabel = 'חזרה', child
           {backTo && <span className="mt-1 h-9 w-9 shrink-0" aria-hidden="true" />}
         </header>
 
-        <ProgressBar step={step} />
+        {step && <ProgressBar step={step} />}
 
         {children}
       </div>

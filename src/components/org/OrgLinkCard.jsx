@@ -38,7 +38,7 @@ export function OrgLinkCard({ profile, onChanged }) {
         מקום העבודה שלי
       </h2>
       <p className="mt-1 text-sm leading-relaxed text-slate-600">
-        עוזר לנו לשייך דיווחים למרחב הנכון. הארגון לעולם לא יידע מי שלח דיווח.
+        עוזר לנו לשייך <bdi>Hooks</bdi> למרחב הנכון. הארגון לעולם לא יידע מי שלח <bdi>Hook</bdi>.
       </p>
 
       {linked && <CurrentLink profile={profile} onChanged={onChanged} />}

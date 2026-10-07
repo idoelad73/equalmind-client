@@ -14,7 +14,16 @@ const DEBOUNCE_MS = 250
  * still carries the name, so a missing code degrades the data rather than
  * blocking the report.
  */
-export function LocalityPicker({ value, onChange, error, disabled = false }) {
+export function LocalityPicker({
+  value,
+  onChange,
+  error,
+  disabled = false,
+  label = 'היישוב',
+  required = true,
+  placeholder = 'בחר/י יישוב מהרשימה…',
+  showDetect = true,
+}) {
   const id = useId()
   const [term, setTerm] = useState('')
   const [debounced, setDebounced] = useState('')
@@ -85,7 +94,10 @@ export function LocalityPicker({ value, onChange, error, disabled = false }) {
   return (
     <div className="flex flex-col gap-1.5" ref={boxRef}>
       <span className="text-sm font-medium text-[var(--l-ink)]">
-        היישוב <span className="font-normal text-[var(--l-muted)]">(חובה)</span>
+        {label}{' '}
+        <span className="font-normal text-[var(--l-muted)]">
+          ({required ? 'חובה' : 'אופציונלי'})
+        </span>
       </span>
 
       {value ? (
@@ -122,7 +134,7 @@ export function LocalityPicker({ value, onChange, error, disabled = false }) {
               autoComplete="off"
               disabled={disabled}
               value={term}
-              placeholder="בחר/י יישוב מהרשימה…"
+              placeholder={placeholder}
               onChange={(event) => {
                 setTerm(event.target.value)
                 setOpen(true)
@@ -187,12 +199,18 @@ export function LocalityPicker({ value, onChange, error, disabled = false }) {
             )}
           </div>
 
+          {/* Offered only where the current position is the answer - the
+              place an incident happened. Someone's home town is not where
+              they are standing when they fill in a registration form. */}
+          {showDetect && (
           <div className="flex items-center gap-3 py-1">
             <span className="h-px flex-1 bg-[var(--l-ring)]" />
             <span className="text-xs text-[var(--l-muted)]">או</span>
             <span className="h-px flex-1 bg-[var(--l-ring)]" />
           </div>
+          )}
 
+          {showDetect && (
           <button
             type="button"
             disabled={disabled || detect.isPending}
@@ -206,6 +224,7 @@ export function LocalityPicker({ value, onChange, error, disabled = false }) {
             )}
             המיקום שלי (זיהוי אוטומטי של היישוב)
           </button>
+          )}
         </>
       )}
 

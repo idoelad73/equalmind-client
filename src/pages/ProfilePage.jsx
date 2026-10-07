@@ -12,6 +12,7 @@ const PROVIDER_LABELS = {
 const TYPE_LABELS = {
   regular: 'משתמש/ת רגיל/ה',
   org_admin: 'מנהל/ת מערכת ארגונית',
+  system_admin: 'מנהל/ת מערכת Equalmind',
 }
 
 export function ProfilePage() {
@@ -55,8 +56,8 @@ export function ProfilePage() {
           aria-hidden="true"
         />
         <span>
-          הדיווחים שלך אנונימיים כלפי הארגון. מנהל.ת המערכת הארגונית רואה
-          את תוכן הדיווח בלבד, לעולם לא מי שלח אותו.
+          ה-<bdi>Hooks</bdi> שלך אנונימיים כלפי הארגון. מנהל.ת המערכת הארגונית רואה
+          את תוכן ה-<bdi>Hook</bdi> בלבד, לעולם לא מי שלח אותו.
         </span>
       </p>
     </section>

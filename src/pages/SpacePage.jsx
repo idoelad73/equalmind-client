@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -8,12 +8,14 @@ import {
   ChevronRight,
   CircleAlert,
   Image as ImageIcon,
+  List,
   Loader2,
   Search,
   Tag,
   Users,
 } from 'lucide-react'
 import { WizardCard, WizardShell } from '@/components/report/WizardShell'
+import { AddNewButton, BehaviorListModal } from '@/components/report/BehaviorListModal'
 import { fetchBehaviors } from '@/lib/reportsApi'
 import { findSpace } from '@/lib/spaces'
 import { paths } from '@/routes/paths'
@@ -37,6 +39,8 @@ export function SpacePage() {
 
   const space = findSpace(key)
   const category = params.get('c')
+  const [listOpen, setListOpen] = useState(false)
+  const closeList = useCallback(() => setListOpen(false), [])
 
   const catalogue = useQuery({
     queryKey: ['behaviors', key],
@@ -48,7 +52,7 @@ export function SpacePage() {
   // An unknown space in the URL is a broken link, not a page.
   if (!space) return <Navigate to={paths.app} replace />
 
-  const title = `דיווח ${space.possessive}`
+  const title = `Hook ${space.possessive}`
 
   if (catalogue.isPending) {
     return (
@@ -93,10 +97,16 @@ export function SpacePage() {
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--l-muted)]">
             הרשימה מנוהלת במסד הנתונים ותופיע כאן ברגע שתתמלא.
           </p>
+          <div className="mx-auto mt-6 max-w-md">
+            <AddNewButton onClick={() => navigate(paths.customReport(space.key))} />
+          </div>
         </WizardCard>
       </WizardShell>
     )
   }
+
+  const pickBehavior = (behavior) => navigate(paths.reportDetails(space.key, behavior.id))
+  const addNew = () => navigate(paths.customReport(space.key))
 
   return category ? (
     <BehaviorStep
@@ -105,20 +115,33 @@ export function SpacePage() {
       category={categories.find((c) => c.key === category)}
       behaviors={behaviors}
       onBack={() => setParams({}, { replace: false })}
-      onPick={(behavior) => navigate(paths.reportDetails(space.key, behavior.id))}
+      onPick={pickBehavior}
+      onAddNew={addNew}
     />
   ) : (
-    <CategoryStep
-      title={title}
-      categories={categories}
-      onPick={(next) => setParams({ c: next.key })}
-    />
+    <>
+      <CategoryStep
+        title={title}
+        categories={categories}
+        onPick={(next) => setParams({ c: next.key })}
+        onShowAll={() => setListOpen(true)}
+        onAddNew={addNew}
+      />
+      <BehaviorListModal
+        open={listOpen}
+        onClose={closeList}
+        categories={categories}
+        behaviors={behaviors}
+        onPick={pickBehavior}
+        onAddNew={addNew}
+      />
+    </>
   )
 }
 
 /* ------------------------------------------------------------------ step 1 */
 
-function CategoryStep({ title, categories, onPick }) {
+function CategoryStep({ title, categories, onPick, onShowAll, onAddNew }) {
   return (
     <WizardShell title={title} step={1} backTo={paths.app} backLabel="חזרה לבחירת מרחב">
       <WizardCard>
@@ -155,6 +178,19 @@ function CategoryStep({ title, categories, onPick }) {
             )
           })}
         </ul>
+
+        <div className="mt-6 flex flex-col gap-3 border-t border-[var(--l-ring)] pt-6">
+          <button
+            type="button"
+            onClick={onShowAll}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--l-ring)] bg-white px-4 py-3 text-sm font-semibold text-[var(--l-ink)] transition-colors hover:border-[var(--l-primary)] hover:bg-[var(--l-soft)]/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--l-primary)]"
+          >
+            <List size={16} className="text-[var(--l-primary)]" aria-hidden="true" />
+            אינני בטוח/ה, בוא/י נראה את הרשימה המלאה
+          </button>
+
+          <AddNewButton onClick={onAddNew} />
+        </div>
       </WizardCard>
     </WizardShell>
   )
@@ -162,7 +198,7 @@ function CategoryStep({ title, categories, onPick }) {
 
 /* ------------------------------------------------------------------ step 2 */
 
-function BehaviorStep({ title, space, category, behaviors, onBack, onPick }) {
+function BehaviorStep({ title, space, category, behaviors, onBack, onPick, onAddNew }) {
   const [term, setTerm] = useState('')
   const query = term.trim()
 
@@ -304,9 +340,13 @@ function BehaviorStep({ title, space, category, behaviors, onBack, onPick }) {
                 חזרה לקטגוריות
               </button>
 
-              <span className="text-xs text-[var(--l-muted)]">
-                לא מצאת? נסה/י לחפש במילים אחרות
-              </span>
+              <button
+                type="button"
+                onClick={onAddNew}
+                className="text-xs font-semibold text-[var(--l-primary)] hover:underline"
+              >
+                לא מצאת? הוספ/י <bdi>Hook</bdi> חדש
+              </button>
             </div>
           </>
         )}

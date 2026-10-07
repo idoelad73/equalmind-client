@@ -140,3 +140,27 @@ export async function completeOnboarding({ organizationId, details, csvFile }) {
   return { organizationId: createdOrganizationId, roster, rosterError }
 }
 
+/* --------------------------------------------- inviting a representative */
+
+/**
+ * Invite someone to represent their organisation. Equalmind staff only -
+ * the endpoint is behind requireSystemAdmin, so a non-staff account gets a
+ * 403 rather than a silent no-op.
+ */
+export async function inviteRepresentative(email, organization, name) {
+  try {
+    const { data } = await api.post('/org/invite-representative', {
+      email,
+      // Greets them by name in the invitation email; optional.
+      name: name || undefined,
+      organization: organization && {
+        name: organization.name,
+        registryId: organization.registryId,
+        source: organization.source ?? null,
+      },
+    })
+    return data
+  } catch (error) {
+    throw new Error(error?.message ?? 'שליחת ההזמנה נכשלה.')
+  }
+}

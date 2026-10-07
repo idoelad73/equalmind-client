@@ -39,10 +39,45 @@ export const loginSchema = z.object({
  * back on, a typo would create an account the person can never sign into - so
  * the re-type does the job the confirmation link normally would.
  */
+/** Israeli mobile, in any of the forms people type it. */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^(\+?972[-\s]?|0)5\d[-\s]?\d{3}[-\s]?\d{4}$/, 'מספר נייד לא תקין (למשל 050-1234567)')
+
+const optionalText = (max, message) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .optional()
+    .transform((value) => (value === '' ? undefined : value))
+
+/** Where the person lives, chosen from the CBS list rather than typed. */
+export const residenceSchema = z
+  .object({
+    code: z.string().nullable(),
+    name: z.string().trim().min(1).max(120),
+  })
+  // nullish, not nullable: the field is null while nothing is picked and
+  // absent if a caller omits it entirely, and both should read as the same
+  // Hebrew message rather than a zod type error.
+  .nullish()
+  .refine((value) => value != null, { message: 'יש לבחור מקום מגורים' })
+
 export const registerSchema = z
   .object({
-    // Optional: an anonymous account stays valid without it.
+    // Required: it is what lets a report be read against where someone
+    // actually lives, rather than only where an incident happened.
+    residence: residenceSchema,
+
+    // Optional: an anonymous account stays valid without any of these.
     organization: affiliationSchema.optional(),
+    fullName: optionalText(100, 'השם ארוך מדי'),
+    phone: phoneSchema.optional().or(z.literal('').transform(() => undefined)),
+    address: optionalText(200, 'הכתובת ארוכה מדי'),
+    gender: z.enum(['male', 'female', 'not_relevant']).optional(),
+
     email: emailSchema,
     emailConfirm: z
       .string()

@@ -101,3 +101,9 @@ export async function submitReport(payload) {
   const { data } = await api.post('/reports', payload)
   return data
 }
+
+/** A Hook that is not in the catalogue. */
+export async function submitCustomReport(payload) {
+  const { data } = await api.post('/reports/custom', payload)
+  return data
+}

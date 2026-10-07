@@ -32,24 +32,49 @@ function toUser(user) {
   }
 }
 
-export async function register({ email, password, organization }) {
+export async function register({
+  email,
+  password,
+  organization,
+  residence,
+  fullName,
+  phone,
+  address,
+  gender,
+}) {
   assertConfigured()
 
-  // The affiliation rides along in signup metadata, which the database
-  // trigger copies onto the profile. Safe here because it is a claim about
-  // oneself, not a permission - account type is never read from metadata.
-  const data_ = organization?.name
-    ? {
-        org_name: organization.name,
-        org_registry_id: organization.registryId ?? '',
-        org_registry_source: organization.source ?? '',
-      }
-    : undefined
+  // Everything here rides along in signup metadata, which the database
+  // trigger copies onto the profile. Safe because every one of these is a
+  // claim someone makes about themselves, not a permission - account type is
+  // never read from metadata. The trigger normalises the phone number and
+  // drops it if another account already holds it.
+  const metadata = {
+    ...(organization?.name
+      ? {
+          org_name: organization.name,
+          org_registry_id: organization.registryId ?? '',
+          org_registry_source: organization.source ?? '',
+        }
+      : {}),
+    ...(residence
+      ? {
+          residence_locality_code: residence.code ?? '',
+          residence_locality_name: residence.name,
+        }
+      : {}),
+    ...(fullName ? { full_name: fullName } : {}),
+    ...(phone ? { phone } : {}),
+    ...(address ? { address } : {}),
+    ...(gender ? { gender } : {}),
+  }
+
+  const hasMetadata = Object.keys(metadata).length > 0
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    ...(data_ ? { options: { data: data_ } } : {}),
+    ...(hasMetadata ? { options: { data: metadata } } : {}),
   })
   if (error) throw new Error(translate(error))
 
