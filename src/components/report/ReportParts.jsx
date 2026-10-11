@@ -73,7 +73,7 @@ export function WhenField({ form, set, disabled }) {
 
 /* --------------------------------------------------------------- filed */
 
-export function Filed({ space, title, step, subtitle }) {
+export function Filed({ space, title, step, subtitle, note }) {
   return (
     <WizardShell title={title} step={step} subtitle={subtitle}>
       <WizardCard className="flex flex-col items-center gap-4 py-12 text-center">
@@ -85,6 +85,11 @@ export function Filed({ space, title, step, subtitle }) {
             תודה. ה-<bdi>Hook</bdi> אנונימי כלפי הארגון — הארגון רואה את תוכן
             ה-<bdi>Hook</bdi> בלבד, לעולם לא מי שלח אותו.
           </p>
+          {note && (
+            <p className="mx-auto mt-3 max-w-sm rounded-xl bg-[var(--l-soft)]/60 px-4 py-2.5 text-sm font-medium text-[var(--l-ink)]">
+              {note}
+            </p>
+          )}
         </div>
 
         <div className="mt-2 flex flex-wrap justify-center gap-3">

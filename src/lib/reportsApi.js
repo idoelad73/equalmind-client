@@ -102,6 +102,16 @@ export async function submitReport(payload) {
   return data
 }
 
+/**
+ * The caller's colleagues for the "about whom" picker. `available` is false
+ * when the employer has not linked this user to an organisation - the form
+ * then offers typing a name instead.
+ */
+export async function fetchWorkers(q) {
+  const { data } = await api.get('/org/workers', { params: q ? { q } : undefined })
+  return data
+}
+
 /** A Hook that is not in the catalogue. */
 export async function submitCustomReport(payload) {
   const { data } = await api.post('/reports/custom', payload)

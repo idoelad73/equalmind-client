@@ -18,7 +18,7 @@ export async function loadInviteContext() {
   const { data: membership } = await supabase
     .from('org_admins')
     .select(
-      'organization_id, full_name, mobile, organizations(name, industry, registry_id, registry_source, address, employee_count)',
+      'organization_id, organizations(name, industry, registry_id, registry_source, address, employee_count)',
     )
     .maybeSingle()
 
@@ -28,8 +28,9 @@ export async function loadInviteContext() {
     email: data.session.user.email ?? '',
     organizationId: membership?.organization_id ?? null,
     prefill: {
-      fullName: membership?.full_name ?? '',
-      mobile: membership?.mobile ?? '',
+      // No name or mobile: nothing knows them before the person types them.
+      // org_admins used to carry a copy, always null since the CLI stopped
+      // setting it, so this prefilled two fields with '' every time.
       // Shaped for OrgAutocomplete. Only prefilled when we hold a registration
       // number, since a bare name is not a registry selection.
       organization:

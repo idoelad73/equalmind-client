@@ -27,6 +27,17 @@ const NAV = [
   { to: paths.about, label: 'מה זה Equalmind', icon: HelpCircle },
 ]
 
+/**
+ * What each account type is called on screen. Keyed on the stored value, so
+ * renaming a label here cannot change who is what - and an unknown type
+ * renders nothing rather than guessing at a name for it.
+ */
+const USER_TYPE_LABELS = {
+  regular: 'עובד',
+  org_admin: 'נציג הארגון',
+  system_admin: 'מנהל המערכת',
+}
+
 const linkClass = ({ isActive }) =>
   cn(
     'inline-flex items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-2',
@@ -45,6 +56,12 @@ export function Navbar() {
   const [inviteOpen, setInviteOpen] = useState(false)
   // Carried across so the invitation dialog can say what was just imported.
   const [imported, setImported] = useState(null)
+  // Which organisation the staff upload was for, handed to the invitation
+  // dialog so it scopes to the same one.
+  const [notifyOrgId, setNotifyOrgId] = useState(null)
+  // When the invitation dialog was opened from an upload, the moment that
+  // upload wrote its rows - so "only the new ones" means that upload's.
+  const [notifySince, setNotifySince] = useState(null)
 
   // Same queryKey as the profile page, so this is a cache hit there and back.
   // The button is a convenience only - every roster route is gated server
@@ -52,6 +69,7 @@ export function Navbar() {
   const profile = useQuery({ queryKey: ['profile'], queryFn: fetchMyProfile })
   const isOrgAdmin = profile.data?.user_type === 'org_admin'
   const isSystemAdmin = profile.data?.user_type === 'system_admin'
+  const userTypeLabel = USER_TYPE_LABELS[profile.data?.user_type]
 
   async function handleSignOut() {
     setOpen(false)
@@ -78,6 +96,12 @@ export function Navbar() {
               {label}
             </NavLink>
           ))}
+
+          {userTypeLabel && (
+            <span className="ms-1 inline-flex items-center rounded-full bg-[var(--l-soft)]/70 px-3 py-1 text-xs font-semibold whitespace-nowrap text-[var(--l-primary)] ring-1 ring-[var(--l-ring)]">
+              {userTypeLabel}
+            </span>
+          )}
         </nav>
 
         <div className="ms-auto flex items-center gap-2">
@@ -101,7 +125,7 @@ export function Navbar() {
             </button>
           )}
 
-          {isOrgAdmin && (
+          {(isOrgAdmin || isSystemAdmin) && (
             <button
               type="button"
               onClick={() => setRosterOpen(true)}
@@ -154,6 +178,12 @@ export function Navbar() {
             </NavLink>
           ))}
 
+          {userTypeLabel && (
+            <span className="mt-1 inline-flex w-fit items-center rounded-full bg-[var(--l-soft)]/70 px-3 py-1 text-xs font-semibold text-[var(--l-primary)] ring-1 ring-[var(--l-ring)]">
+              {userTypeLabel}
+            </span>
+          )}
+
           {isSystemAdmin && (
             <button
               type="button"
@@ -168,7 +198,7 @@ export function Navbar() {
             </button>
           )}
 
-          {isOrgAdmin && (
+          {(isOrgAdmin || isSystemAdmin) && (
             <button
               type="button"
               onClick={() => {
@@ -203,8 +233,12 @@ export function Navbar() {
       <RosterUploadModal
         open={rosterOpen}
         onClose={() => setRosterOpen(false)}
-        onRequestNotify={(summary) => {
+        // Staff pick an organisation first; an org admin has only their own.
+        asStaff={isSystemAdmin}
+        onRequestNotify={(summary, forOrganizationId, importedAt) => {
           setImported(summary)
+          setNotifyOrgId(forOrganizationId ?? null)
+          setNotifySince(importedAt ?? null)
           setRosterOpen(false)
           setNotifyOpen(true)
         }}
@@ -215,9 +249,13 @@ export function Navbar() {
       <NotifyModal
         open={notifyOpen}
         imported={imported}
+        organizationId={notifyOrgId}
+        since={notifySince}
         onClose={() => {
           setNotifyOpen(false)
           setImported(null)
+          setNotifyOrgId(null)
+          setNotifySince(null)
         }}
       />
     </header>

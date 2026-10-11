@@ -33,9 +33,23 @@ const STATUS = {
  * together are the cost - and this is the one action in the product that
  * reaches people who are not users and never agreed to anything.
  */
-export function NotifyModal({ open, onClose, imported = null }) {
+export function NotifyModal({
+  open,
+  onClose,
+  imported = null,
+  organizationId = null,
+  // Set when the dialog was opened straight after an upload: the moment
+  // that upload wrote its rows. It changes what "new" means - see
+  // AudienceChoice below.
+  since = null,
+}) {
   const [draft, setDraft] = useState('')
   const [dirty, setDirty] = useState(false)
+  // 'new' = the people this upload added, or - with no upload behind the
+  // dialog - the people never invited. 'all' = everyone not yet registered.
+  // Defaults to 'new': the harmless reading of an ambiguous intent, since
+  // the other one messages people who already heard from us.
+  const [audience, setAudience] = useState('new')
   const dialogRef = useRef(null)
 
   const template = useQuery({ queryKey: ['sms-template'], queryFn: fetchTemplate, enabled: open })
@@ -44,8 +58,11 @@ export function NotifyModal({ open, onClose, imported = null }) {
   // staleTime 0: the dialog often opens straight after an import, so the
   // recipient count must be recomputed rather than served from cache.
   const plan = useQuery({
-    queryKey: ['notify-plan'],
-    queryFn: () => notifyRoster({ dryRun: true }),
+    // Keyed on the audience: switching recomputes who would be reached,
+    // rather than showing a count from the other choice.
+    queryKey: ['notify-plan', audience, organizationId, since],
+    queryFn: () =>
+      notifyRoster({ dryRun: true, resend: audience === 'all', organizationId, since }),
     enabled: open,
     staleTime: 0,
     refetchOnMount: 'always',
@@ -64,7 +81,7 @@ export function NotifyModal({ open, onClose, imported = null }) {
     mutationFn: async () => {
       // Saved first, so what was reviewed is what goes out.
       if (dirty) await saveTemplate(draft.trim() || null)
-      return notifyRoster({ dryRun: false })
+      return notifyRoster({ dryRun: false, resend: audience === 'all', organizationId, since })
     },
   })
 
@@ -72,6 +89,7 @@ export function NotifyModal({ open, onClose, imported = null }) {
     if (open) return
     setDraft('')
     setDirty(false)
+    setAudience('new')
     save.reset()
     send.reset()
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -95,6 +113,10 @@ export function NotifyModal({ open, onClose, imported = null }) {
   const counter = counterFor(draft)
   const result = send.data
   const recipients = plan.data?.recipients ?? 0
+  // What the chosen option covers in total, which is not the same as what
+  // one send delivers: the server caps a run at `limit`.
+  const selectedCount =
+    plan.data?.counts?.[audience === 'all' ? 'all' : 'newOnly'] ?? null
   const loading = template.isPending || plan.isPending
 
   return createPortal(
@@ -158,7 +180,15 @@ export function NotifyModal({ open, onClose, imported = null }) {
                 </p>
               )}
 
-              <Recipients plan={plan.data} />
+              <AudienceChoice
+                value={audience}
+                counts={plan.data?.counts}
+                fromImport={Boolean(since)}
+                disabled={send.isPending}
+                onChange={setAudience}
+              />
+
+              <Recipients plan={plan.data} selectedCount={selectedCount} />
 
               <div className="mt-5">
                 <SmsTemplateField
@@ -238,8 +268,10 @@ export function NotifyModal({ open, onClose, imported = null }) {
 
 /* --------------------------------------------------------- who and cost */
 
-function Recipients({ plan }) {
+function Recipients({ plan, selectedCount = null }) {
   if (!plan) return null
+
+  const capped = selectedCount !== null && selectedCount > plan.recipients
 
   return (
     <div className="flex flex-col gap-2">
@@ -257,6 +289,13 @@ function Recipients({ plan }) {
           )}
         </p>
       </div>
+
+      {capped && (
+        <p className="text-xs leading-relaxed text-slate-500">
+          בבחירה זו יש {selectedCount} נמענים. נשלחות עד {plan.limit} הודעות בכל פעם —
+          יש להפעיל שוב כדי להמשיך.
+        </p>
+      )}
 
       {plan.unreachable > 0 && (
         <p className="text-xs leading-relaxed text-slate-500">
@@ -340,5 +379,90 @@ function Result({ result }) {
         </p>
       )}
     </div>
+  )
+}
+
+/* ------------------------------------------------------------- audience */
+
+const AUDIENCES = [
+  {
+    value: 'new',
+    label: 'לשלוח רק לעובדים חדשים ברשימה',
+    // Two different hints, because the option genuinely means two
+    // different things. Opened from an upload it is that upload's rows;
+    // opened from the dashboard there is no upload to refer to, and the
+    // only honest reading left is "nobody has written to them yet".
+    hint: 'מי שנוסף/ה בטעינה הזו',
+    hintStandalone: 'מי שטרם קיבל/ה הזמנה',
+    countKey: 'newOnly',
+  },
+  {
+    value: 'all',
+    label: 'לשלוח לכל העובדים',
+    hint: 'כולל מי שכבר קיבל/ה הזמנה בעבר',
+    countKey: 'all',
+  },
+]
+
+/**
+ * Who the invitation goes to.
+ *
+ * Radios, not checkboxes: the two are mutually exclusive, and a pair of
+ * checkboxes would let someone tick both or neither and leave the dialog
+ * with no answer to act on.
+ *
+ * Each option carries its own count, from the same dry run. The difference
+ * between them is messages landing on people who already heard from us, and
+ * that is not a choice anyone should make blind.
+ */
+function AudienceChoice({ value, counts, fromImport, disabled, onChange }) {
+  return (
+    <fieldset className="mb-4">
+      <legend className="text-sm font-medium text-slate-900">למי לשלוח?</legend>
+
+      <div className="mt-2 flex flex-col gap-2">
+        {AUDIENCES.map((option) => {
+          const selected = value === option.value
+          const count = counts?.[option.countKey]
+
+          return (
+            <label
+              key={option.value}
+              className={cn(
+                'flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors',
+                selected
+                  ? 'border-[var(--l-primary)] bg-[var(--l-soft)]/50'
+                  : 'border-[var(--l-ring)] hover:bg-[var(--l-soft)]/30',
+                disabled && 'pointer-events-none opacity-60',
+              )}
+            >
+              <input
+                type="radio"
+                name="audience"
+                value={option.value}
+                checked={selected}
+                disabled={disabled}
+                onChange={() => onChange(option.value)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--l-primary)]"
+              />
+
+              <span className="flex-1">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-900">{option.label}</span>
+                  {count !== undefined && (
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--l-muted)]">
+                      {count}
+                    </span>
+                  )}
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  {fromImport ? option.hint : (option.hintStandalone ?? option.hint)}
+                </span>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </fieldset>
   )
 }

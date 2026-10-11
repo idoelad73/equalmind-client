@@ -22,8 +22,15 @@ export async function fetchMessages(status = 'pending') {
 
 /**
  * Approve a proposal, which also adds it to the behaviour catalogue.
- * `changes` may carry { name, categoryKey | categoryLabel, note }; anything
- * left out falls back to what the reporter submitted.
+ *
+ * `changes` carries two kinds of field. { name, categoryKey | categoryLabel }
+ * decide the catalogue row. { space, targetType, targetName, localityName,
+ * localityCode, occurredAt, occurredText, notes } edit the REPORT - the
+ * reporter's own account - and the server records what each one used to say
+ * in messages.edits before overwriting it.
+ *
+ * Anything left out is untouched; an explicit null clears the field. Those
+ * are different instructions, so do not collapse undefined into null here.
  */
 export async function approveMessage(id, changes = {}) {
   const { data } = await api.post(`/messages/${id}/approve`, changes)

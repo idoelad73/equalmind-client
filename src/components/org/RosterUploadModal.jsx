@@ -17,19 +17,26 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { fetchRoster, inspectCsvHeader, uploadRoster } from '@/lib/rosterApi'
+import {
+  fetchOrganizations,
+  fetchRoster,
+  inspectCsvHeader,
+  uploadRoster,
+} from '@/lib/rosterApi'
 import { LANDING_VARS } from '@/pages/landingPalettes'
+import { RosterIssuesModal, rosterIssues } from '@/components/org/RosterIssuesModal'
 
 // Opens straight in Excel (the BOM makes it read the Hebrew as UTF-8), and
 // the hyphenated numbers stay text there, so the leading 0 survives.
 const TEMPLATE =
-  '﻿שם,טלפון,מחלקה,תפקיד\n"דנה כהן",050-1234567,פיתוח,מהנדסת\n"יוסי לוי",052-1234567,,\n'
+  '﻿שם,טלפון,מחלקה,תפקיד\n"דנה כהן",050-1234567,פיתוח,מהנדסת\n"יוסי לוי",052-1234567,כספים,חשב\n'
 
+// All four are required - mirrors REQUIRED_COLUMNS in server/lib/rosterImport.js.
 const COLUMNS = [
   { name: 'שם', required: true },
   { name: 'טלפון', required: true, note: 'נייד ישראלי' },
-  { name: 'מחלקה', required: false },
-  { name: 'תפקיד', required: false },
+  { name: 'מחלקה', required: true },
+  { name: 'תפקיד', required: true },
 ]
 
 const STATUS = {
@@ -47,46 +54,83 @@ const STATUS = {
  * this step is a confirmation, not a decision - but it is an explicit one,
  * because the upload attaches real people to an employer.
  */
-export function RosterUploadModal({ open, onClose, onRequestNotify }) {
+export function RosterUploadModal({ open, onClose, onRequestNotify, asStaff = false }) {
   const [step, setStep] = useState('confirm')
   const [file, setFile] = useState(null)
   const [header, setHeader] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [progress, setProgress] = useState(0)
   const [notify, setNotify] = useState(false)
+  const [issuesOpen, setIssuesOpen] = useState(false)
   const dialogRef = useRef(null)
+  // Staff have no organisation of their own, so they pick one. For an org
+  // admin this stays null and the server uses their membership.
+  const [orgId, setOrgId] = useState(null)
 
-  const roster = useQuery({ queryKey: ['roster'], queryFn: fetchRoster, enabled: open })
+  // Staff list the organisations to choose from; an org admin never sees
+  // this call, and would get a 403 if they made it.
+  const organizations = useQuery({
+    queryKey: ['organizations'],
+    queryFn: fetchOrganizations,
+    enabled: open && asStaff,
+    retry: false,
+  })
+
+  // Waits for a choice when acting as staff: without one the request has
+  // no scope and the server would rightly refuse it.
+  const roster = useQuery({
+    queryKey: ['roster', orgId],
+    queryFn: () => fetchRoster(orgId),
+    enabled: open && (!asStaff || Boolean(orgId)),
+  })
 
   const upload = useMutation({
-    mutationFn: () => uploadRoster(file, setProgress),
+    mutationFn: () => uploadRoster(file, setProgress, orgId),
     onSuccess: (data) => {
       roster.refetch()
-      // Hand straight over to the invitation dialog, where the wording and
-      // the recipient count get approved before anything is sent.
-      if (notify) onRequestNotify?.(data.summary)
+      // Rows left behind come first: the report asks for a fixed file, and
+      // inviting now would skip exactly the people still missing. The report
+      // can still hand over to invitations if the admin chooses.
+      if (rosterIssues(data).length) {
+        setIssuesOpen(true)
+        return
+      }
+      if (notify) requestNotify(data)
     },
   })
+
+  // Hand over to the invitation dialog, where the wording and the recipient
+  // count get approved before anything is sent. orgId is null for an org
+  // admin, which is correct: the server uses their own membership.
+  // importedAt scopes the dialog's "new" option to the rows this upload
+  // added - without it, "new" would mean "never invited", which on a roster
+  // nobody has been messaged yet is everybody.
+  function requestNotify(data) {
+    onRequestNotify?.(data.summary, orgId, data.importedAt ?? null)
+  }
 
   // Reset between openings, so a previous result never shows over a new file
   // and the organisation is always confirmed afresh.
   useEffect(() => {
     if (open) return
     setStep('confirm')
+    setOrgId(null)
     setFile(null)
     setHeader(null)
     setProgress(0)
     setNotify(false)
+    setIssuesOpen(false)
     upload.reset()
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!open) return
+    // While the report is on top, Escape belongs to it.
+    if (!open || issuesOpen) return
     const onKey = (event) => event.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
     dialogRef.current?.focus()
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, issuesOpen])
 
   if (!open) return null
 
@@ -113,9 +157,7 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
     URL.revokeObjectURL(url)
   }
 
-  const missing = header && !header.xlsx
-    ? [!header.hasName && 'שם', !header.hasPhone && 'טלפון'].filter(Boolean)
-    : []
+  const missing = header && !header.xlsx ? header.missing : []
   const headerBad = missing.length > 0
   const result = upload.data
 
@@ -175,6 +217,10 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
           <ConfirmStep
             roster={roster}
             organization={organization}
+            asStaff={asStaff}
+            organizations={organizations}
+            orgId={orgId}
+            onPickOrg={setOrgId}
             onConfirm={() => setStep('upload')}
             onClose={onClose}
           />
@@ -212,7 +258,11 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
               )}
 
               {result ? (
-                <Results result={result} onAnother={() => pick(null)} />
+                <Results
+                  result={result}
+                  onAnother={() => pick(null)}
+                  onShowIssues={() => setIssuesOpen(true)}
+                />
               ) : (
                 <>
                   <label
@@ -263,7 +313,7 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
                         </p>
                         <p className={cn('text-xs', headerBad ? 'text-red-700' : 'text-slate-500')}>
                           {headerBad
-                            ? `חסרה עמודת ${missing.join(' ועמודת ')} בשורת הכותרות.`
+                            ? `חסרה עמודת ${missing.join(', ')} בשורת הכותרות.`
                             : header?.xlsx
                               ? 'קובץ אקסל — העמודות ייבדקו בעת הטעינה.'
                               : `עמודות: ${header?.columns.join(', ')}`}
@@ -333,9 +383,10 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
                       ))}
                     </ul>
                     <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                      שורה ראשונה עם שמות העמודות. שורה בלי שם או בלי מספר נייד
-                      תקין לא תיטען, והסיבה תוצג. אין עמודת ארגון — הרשימה נטענת
-                      לארגון שאושר למעלה.
+                      שורה ראשונה עם שמות העמודות, וכל ארבע העמודות חובה. שורה
+                      שחסר בה אחד השדות, או שהמספר בה אינו נייד תקין, לא תיטען
+                      והסיבה תוצג. אין עמודת ארגון — הרשימה נטענת לארגון שאושר
+                      למעלה.
                     </p>
                   </div>
 
@@ -398,6 +449,27 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
           </>
         )}
       </div>
+
+      <RosterIssuesModal
+        open={issuesOpen}
+        result={result}
+        organization={organization?.name}
+        onClose={() => setIssuesOpen(false)}
+        // Back to an empty drop zone for the corrected file. Re-uploading is
+        // safe: rows already loaded come back as "already listed".
+        onReload={() => {
+          setIssuesOpen(false)
+          pick(null)
+        }}
+        onInvite={
+          onRequestNotify
+            ? () => {
+                setIssuesOpen(false)
+                requestNotify(result)
+              }
+            : undefined
+        }
+      />
     </div>,
     document.body,
   )
@@ -405,7 +477,28 @@ export function RosterUploadModal({ open, onClose, onRequestNotify }) {
 
 /* ------------------------------------------------------------- step one */
 
-function ConfirmStep({ roster, organization, onConfirm, onClose }) {
+function ConfirmStep({
+  roster,
+  organization,
+  asStaff,
+  organizations,
+  orgId,
+  onPickOrg,
+  onConfirm,
+  onClose,
+}) {
+  // Staff choose before anything else happens. Until they do there is no
+  // organisation to describe, so the rest of the step has nothing to say.
+  if (asStaff && !orgId) {
+    return (
+      <OrganisationPicker
+        organizations={organizations}
+        onPick={onPickOrg}
+        onClose={onClose}
+      />
+    )
+  }
+
   if (roster.isPending) {
     return (
       <div className="flex items-center justify-center gap-2 px-6 py-14 text-sm text-slate-500">
@@ -463,9 +556,20 @@ function ConfirmStep({ roster, organization, onConfirm, onClose }) {
         </div>
 
         <p className="mt-3 text-xs leading-relaxed text-slate-500">
-          שם הארגון נקרא מהמערכת ואינו ניתן לעריכה כאן. אם הוא שגוי, יש לפנות
-          אלינו לפני טעינת הרשימה.
+          {asStaff
+            ? 'הרשימה תיטען לארגון שנבחר. אפשר לחזור ולבחור ארגון אחר.'
+            : 'שם הארגון נקרא מהמערכת ואינו ניתן לעריכה כאן. אם הוא שגוי, יש לפנות אלינו לפני טעינת הרשימה.'}
         </p>
+
+        {asStaff && (
+          <button
+            type="button"
+            onClick={() => onPickOrg(null)}
+            className="mt-2 text-sm font-semibold text-[var(--l-primary)] hover:underline"
+          >
+            בחירת ארגון אחר
+          </button>
+        )}
 
         {roster.data?.count > 0 && (
           <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">
@@ -499,7 +603,7 @@ function ConfirmStep({ roster, organization, onConfirm, onClose }) {
 
 /* ------------------------------------------------------------- results */
 
-function Results({ result, onAnother }) {
+function Results({ result, onAnother, onShowIssues }) {
   const { summary, skipped, attached, results } = result
   const problems = results.filter((r) => r.status === 'conflict')
 
@@ -531,6 +635,15 @@ function Results({ result, onAnother }) {
               <li className="text-xs text-amber-800">ועוד…</li>
             )}
           </ul>
+          {/* The full report, if it was closed - it is where the fix
+              instructions and the download live. */}
+          <button
+            type="button"
+            onClick={onShowIssues}
+            className="mt-2 text-xs font-semibold text-amber-900 underline hover:no-underline"
+          >
+            לדוח המלא ולהנחיות התיקון
+          </button>
         </div>
       )}
 
@@ -573,3 +686,93 @@ function Results({ result, onAnother }) {
   )
 }
 
+/* ------------------------------------------------------ the staff picker */
+
+/**
+ * Which organisation the roster is for. Equalmind staff only.
+ *
+ * Lists organisations that already exist rather than offering the company
+ * registry: a roster belongs to an organisation we have verified, and
+ * creating one here would be a different, much weightier action than
+ * loading a list of names into it.
+ */
+function OrganisationPicker({ organizations, onPick, onClose }) {
+  if (organizations.isPending) {
+    return (
+      <div className="flex items-center justify-center gap-2 px-6 py-14 text-sm text-slate-500">
+        <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+        טוען ארגונים…
+      </div>
+    )
+  }
+
+  if (organizations.isError) {
+    return (
+      <div className="px-6 py-10 text-center">
+        <CircleAlert size={24} className="mx-auto text-red-500" aria-hidden="true" />
+        <p className="mt-3 text-sm text-slate-700">
+          לא הצלחנו לטעון את רשימת הארגונים.
+        </p>
+      </div>
+    )
+  }
+
+  const list = organizations.data ?? []
+
+  return (
+    <>
+      <div className="flex-1 overflow-y-auto px-6 py-5">
+        <p className="text-sm leading-relaxed text-[var(--l-muted)]">
+          לאיזה ארגון לטעון את הרשימה?
+        </p>
+
+        {list.length === 0 ? (
+          <p className="py-10 text-center text-sm text-slate-500">
+            אין ארגונים פעילים במערכת.
+          </p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-2">
+            {list.map((org) => (
+              <li key={org.id}>
+                <button
+                  type="button"
+                  onClick={() => onPick(org.id)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-[var(--l-ring)] bg-white px-4 py-3.5 text-start transition-all hover:-translate-y-0.5 hover:border-[var(--l-primary)] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--l-primary)]"
+                >
+                  <Building2
+                    size={17}
+                    className="shrink-0 text-[var(--l-primary)]"
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-slate-900">
+                      {org.name}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-slate-500">
+                      {org.roster_count} ברשימה · {org.attached} משויכים
+                    </span>
+                  </span>
+                  {org.registry_id && (
+                    <span className="shrink-0 font-mono text-xs text-slate-400" dir="ltr">
+                      {org.registry_id}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="border-t border-slate-200 px-6 py-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex h-11 items-center rounded-xl px-4 text-[15px] font-medium text-[var(--l-muted)] transition-colors hover:bg-[var(--l-soft)]/50"
+        >
+          ביטול
+        </button>
+      </div>
+    </>
+  )
+}

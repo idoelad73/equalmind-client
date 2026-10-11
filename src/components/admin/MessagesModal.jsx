@@ -11,6 +11,7 @@ import {
   Loader2,
   MapPin,
   MessageSquare,
+  Pencil,
   Tag,
   UserRound,
   X,
@@ -19,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { approveMessage, denyMessage, fetchMessages } from '@/lib/messagesApi'
 import { fetchBehaviors } from '@/lib/reportsApi'
 import { NEW_CATEGORY } from '@/schemas/report'
+import { LocalityPicker } from '@/components/ui/LocalityPicker'
 import { CommunityBackdrop } from '@/components/decor/CommunityBackdrop'
 import { LANDING_VARS } from '@/pages/landingPalettes'
 
@@ -39,6 +41,32 @@ const SPACES = {
   work: 'מרחב עבודה',
   community: 'מרחב קהילה',
   consumption: 'מרחב צריכה',
+}
+
+/**
+ * Hebrew for each column messages.edits can mention. Two columns map to
+ * one word on purpose - locality_name and locality_code are one thing to
+ * a reader, and so are the two ways of saying when.
+ */
+const EDIT_LABELS = {
+  behavior_name: 'נוסח',
+  space: 'מרחב',
+  target_type: 'על מי',
+  target_name: 'שם',
+  target_worker_id: 'שיוך לעובד/ת',
+  locality_name: 'יישוב',
+  locality_code: 'יישוב',
+  occurred_at: 'מועד',
+  occurred_text: 'מועד',
+  notes: 'פרטים',
+}
+
+/** An <input type="datetime-local"> value for a stored timestamp. */
+function toLocalInput(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 /**
@@ -244,6 +272,10 @@ function MessageCard({ message, busy, onDecide }) {
             }
           />
         )}
+        {/* "ללא קטגוריה" at filing: the reviewer has to choose one to approve. */}
+        {!message.category_label && message.space && (
+          <Fact icon={Tag} value="ללא קטגוריה — יש לבחור באישור" />
+        )}
         {message.locality_name && <Fact icon={MapPin} value={message.locality_name} />}
         <Fact
           icon={Clock}
@@ -304,101 +336,291 @@ function MessageCard({ message, busy, onDecide }) {
           {message.status === 'approved' && message.behavior_id && ' · נוסף לרשימת ההתנהגויות'}
         </p>
       )}
+
+      <EditedNote edits={message.edits} />
     </li>
+  )
+}
+
+/**
+ * What the reviewer changed, on a Hook that has already been decided.
+ *
+ * Shown because the alternative is an edit to somebody else's account of
+ * something that happened to them, leaving no trace on the screen where
+ * it was made. The values themselves are in messages.edits; this is the
+ * summary line that says to go and look.
+ */
+function EditedNote({ edits }) {
+  if (!edits) return null
+
+  const fields = [...new Set(Object.keys(edits).map((k) => EDIT_LABELS[k] ?? k))]
+  if (!fields.length) return null
+
+  return (
+    <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+      <Pencil size={12} className="shrink-0 text-slate-400" aria-hidden="true" />
+      נערך באישור: {fields.join(', ')}
+    </p>
   )
 }
 
 /* ------------------------------------------------------------ approval */
 
 /**
- * What exactly joins the catalogue: the wording and the category, both
- * pre-filled from the reporter and both editable. These are the fields a
- * behaviors row is made of, so what is confirmed here is what the wizard
- * will show.
+ * The whole Hook, laid open for the reviewer.
+ *
+ * Two different things are being edited here and it is worth knowing
+ * which is which. The wording and the category become a row in
+ * public.behaviors - a catalogue entry everyone will see from now on.
+ * Everything below them edits THIS REPORT: one person's account of
+ * something that happened to them. The server records the previous value
+ * of every field it changes (messages.edits, migration 029), so a
+ * correction is a correction and not a quiet rewrite.
+ *
+ * The form always sends its full contents and lets the server work out
+ * what actually differs. Sending only the fields the component thinks
+ * changed is one bookkeeping mistake away from silently dropping an edit.
  */
 function ApprovePanel({ message, busy, onCancel, onConfirm }) {
-  const [name, setName] = useState(message.new_hook_text)
-  const [category, setCategory] = useState(
-    message.category_key ?? (message.category_is_new ? NEW_CATEGORY : ''),
-  )
-  const [newCategory, setNewCategory] = useState(
-    message.category_is_new ? (message.category_label ?? '') : '',
-  )
+  const [form, setForm] = useState(() => ({
+    name: message.new_hook_text ?? '',
+    space: message.space ?? '',
+    category: message.category_key ?? (message.category_is_new ? NEW_CATEGORY : ''),
+    newCategory: message.category_is_new ? (message.category_label ?? '') : '',
+    targetType: message.target_type ?? '',
+    targetName: message.target_name ?? '',
+    locality: message.locality_name
+      ? { code: message.locality_code ?? null, name: message.locality_name }
+      : null,
+    whenMode: message.occurred_at ? 'exact' : message.occurred_text ? 'text' : 'none',
+    occurredAt: toLocalInput(message.occurred_at),
+    occurredText: message.occurred_text ?? '',
+    notes: message.notes ?? '',
+  }))
+
+  const set = (patch) => setForm((prev) => ({ ...prev, ...patch }))
 
   const catalogue = useQuery({
-    queryKey: ['behaviors', message.space],
-    queryFn: () => fetchBehaviors(message.space),
-    enabled: Boolean(message.space),
+    queryKey: ['behaviors', form.space],
+    queryFn: () => fetchBehaviors(form.space),
+    enabled: Boolean(form.space),
     staleTime: 10 * 60_000,
   })
   const categories = catalogue.data?.categories ?? []
 
-  const trimmedName = name.trim()
-  const trimmedNew = newCategory.trim()
+  const name = form.name.trim()
+  const newCategory = form.newCategory.trim()
+  const targetName = form.targetName.trim()
+
   const ready =
-    trimmedName.length >= 3 &&
-    (category === NEW_CATEGORY ? trimmedNew.length >= 2 : Boolean(category))
+    name.length >= 3 &&
+    Boolean(form.space) &&
+    (form.category === NEW_CATEGORY ? newCategory.length >= 2 : Boolean(form.category)) &&
+    // Mirrors reports_employee_has_name: a Hook about an employee with no
+    // name is about nobody, and the database refuses it.
+    (form.targetType !== 'employee' || targetName.length > 0)
 
   function confirm() {
-    const changes = category === NEW_CATEGORY ? { categoryLabel: trimmedNew } : { categoryKey: category }
-    if (trimmedName !== message.new_hook_text) changes.name = trimmedName
-    onConfirm(changes)
+    onConfirm({
+      name,
+      ...(form.category === NEW_CATEGORY
+        ? { categoryLabel: newCategory }
+        : { categoryKey: form.category }),
+      space: form.space,
+      ...(form.targetType ? { targetType: form.targetType } : null),
+      targetName: targetName || null,
+      localityName: form.locality?.name ?? null,
+      localityCode: form.locality?.code ?? null,
+      // Either a timestamp or the free text, never both - that is how the
+      // report stores it, and the reviewer picks which one applies.
+      occurredAt:
+        form.whenMode === 'exact' && form.occurredAt
+          ? new Date(form.occurredAt).toISOString()
+          : null,
+      occurredText: form.whenMode === 'text' ? form.occurredText.trim() || null : null,
+      notes: form.notes.trim() || null,
+    })
   }
 
   const field =
     'w-full rounded-lg border border-[var(--l-ring)] bg-white px-3 text-sm text-[var(--l-ink)] outline-none focus:border-[var(--l-primary)]'
 
   return (
-    <div className="mt-4 flex flex-col gap-3 rounded-xl bg-[var(--l-soft)]/50 p-4 ring-1 ring-[var(--l-ring)]">
+    <div className="mt-4 flex flex-col gap-4 rounded-xl bg-[var(--l-soft)]/50 p-4 ring-1 ring-[var(--l-ring)]">
       <p className="flex items-center gap-1.5 text-sm font-bold text-[var(--l-ink)]">
         <BookPlus size={15} className="text-[var(--l-primary)]" aria-hidden="true" />
-        הוספה לרשימת ההתנהגויות
+        אישור ועריכת ה-Hook
       </p>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-slate-600">נוסח ההתנהגות</span>
-        <input
-          type="text"
-          maxLength={200}
-          value={name}
-          disabled={busy}
-          onChange={(event) => setName(event.target.value)}
-          className={cn(field, 'h-10')}
-        />
-      </label>
+      {/* ---- becomes a catalogue row ---- */}
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 text-xs font-semibold text-[var(--l-primary)]">
+          נוסף לרשימת ההתנהגויות
+        </legend>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-slate-600">קטגוריה</span>
-        <select
-          value={category}
-          disabled={busy || catalogue.isPending}
-          onChange={(event) => setCategory(event.target.value)}
-          className={cn(field, 'h-10')}
-        >
-          <option value="" disabled>
-            {catalogue.isPending ? 'טוען…' : 'בחר/י קטגוריה'}
-          </option>
-          {categories.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
+        <Field label="נוסח ההתנהגות">
+          <input
+            type="text"
+            maxLength={200}
+            value={form.name}
+            disabled={busy}
+            onChange={(event) => set({ name: event.target.value })}
+            className={cn(field, 'h-10')}
+          />
+        </Field>
+
+        <Field label="מרחב">
+          <select
+            value={form.space}
+            disabled={busy}
+            // The categories belong to a space, so changing it invalidates
+            // whatever was chosen - better cleared than silently wrong.
+            onChange={(event) =>
+              set({ space: event.target.value, category: '', newCategory: '' })
+            }
+            className={cn(field, 'h-10')}
+          >
+            <option value="" disabled>
+              בחר/י מרחב
             </option>
-          ))}
-          <option value={NEW_CATEGORY}>קטגוריה חדשה…</option>
-        </select>
-      </label>
+            {Object.entries(SPACES).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-      {category === NEW_CATEGORY && (
-        <input
-          type="text"
-          maxLength={80}
-          value={newCategory}
+        <Field label="קטגוריה">
+          <select
+            value={form.category}
+            disabled={busy || !form.space || catalogue.isPending}
+            onChange={(event) => set({ category: event.target.value })}
+            className={cn(field, 'h-10')}
+          >
+            <option value="" disabled>
+              {catalogue.isPending ? 'טוען…' : 'בחר/י קטגוריה'}
+            </option>
+            {categories.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
+            <option value={NEW_CATEGORY}>קטגוריה חדשה…</option>
+          </select>
+        </Field>
+
+        {form.category === NEW_CATEGORY && (
+          <input
+            type="text"
+            maxLength={80}
+            value={form.newCategory}
+            disabled={busy}
+            onChange={(event) => set({ newCategory: event.target.value })}
+            placeholder="שם הקטגוריה החדשה"
+            aria-label="שם הקטגוריה החדשה"
+            className={cn(field, 'h-10')}
+          />
+        )}
+      </fieldset>
+
+      {/* ---- edits the report itself ---- */}
+      <fieldset className="flex flex-col gap-3 border-t border-[var(--l-ring)] pt-4">
+        <legend className="mb-1 text-xs font-semibold text-slate-600">
+          פרטי ה-Hook — עריכה משנה את הדיווח עצמו
+        </legend>
+
+        <Field label="על מי">
+          <select
+            value={form.targetType}
+            disabled={busy}
+            onChange={(event) => set({ targetType: event.target.value })}
+            className={cn(field, 'h-10')}
+          >
+            <option value="" disabled>
+              בחר/י
+            </option>
+            {Object.entries(TARGETS).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {(form.targetType === 'employee' || form.targetType === 'business') && (
+          <Field
+            label={form.targetType === 'employee' ? 'שם העובד/ת' : 'שם בית העסק'}
+            hint={form.targetType === 'employee' ? 'חובה' : undefined}
+          >
+            <input
+              type="text"
+              maxLength={120}
+              value={form.targetName}
+              disabled={busy}
+              onChange={(event) => set({ targetName: event.target.value })}
+              className={cn(field, 'h-10')}
+            />
+          </Field>
+        )}
+
+        <LocalityPicker
+          label="מיקום"
+          required={false}
+          value={form.locality}
           disabled={busy}
-          onChange={(event) => setNewCategory(event.target.value)}
-          placeholder="שם הקטגוריה החדשה"
-          aria-label="שם הקטגוריה החדשה"
-          className={cn(field, 'h-10')}
+          onChange={(locality) => set({ locality })}
         />
-      )}
+
+        <Field label="מתי">
+          <select
+            value={form.whenMode}
+            disabled={busy}
+            onChange={(event) => set({ whenMode: event.target.value })}
+            className={cn(field, 'h-10')}
+          >
+            <option value="none">לא צוין</option>
+            <option value="exact">תאריך ושעה</option>
+            <option value="text">טקסט חופשי</option>
+          </select>
+        </Field>
+
+        {form.whenMode === 'exact' && (
+          <input
+            type="datetime-local"
+            value={form.occurredAt}
+            disabled={busy}
+            onChange={(event) => set({ occurredAt: event.target.value })}
+            aria-label="תאריך ושעה"
+            className={cn(field, 'h-10')}
+            dir="ltr"
+          />
+        )}
+
+        {form.whenMode === 'text' && (
+          <input
+            type="text"
+            maxLength={120}
+            value={form.occurredText}
+            disabled={busy}
+            onChange={(event) => set({ occurredText: event.target.value })}
+            placeholder="למשל: בשבוע שעבר"
+            aria-label="מתי זה קרה"
+            className={cn(field, 'h-10')}
+          />
+        )}
+
+        <Field label="פרטים">
+          <textarea
+            rows={3}
+            maxLength={1000}
+            value={form.notes}
+            disabled={busy}
+            onChange={(event) => set({ notes: event.target.value })}
+            className={cn(field, 'resize-y py-2 leading-relaxed')}
+          />
+        </Field>
+      </fieldset>
 
       <div className="flex gap-2.5">
         <button
@@ -424,6 +646,18 @@ function ApprovePanel({ message, busy, onCancel, onConfirm }) {
         </button>
       </div>
     </div>
+  )
+}
+
+function Field({ label, hint, children }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-slate-600">
+        {label}
+        {hint && <span className="text-slate-400"> ({hint})</span>}
+      </span>
+      {children}
+    </label>
   )
 }
 

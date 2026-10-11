@@ -1,13 +1,20 @@
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Building2, Info, Landmark, Loader2, Plus, Store, UserRound } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { BookPlus, Building2, Info, Landmark, Loader2, Plus, Store, UserRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WizardCard, WizardShell } from '@/components/report/WizardShell'
 import { Filed, WhenField } from '@/components/report/ReportParts'
 import { LocalityPicker } from '@/components/ui/LocalityPicker'
+import { WorkerPicker } from '@/components/report/WorkerPicker'
 import { fetchBehaviors, submitCustomReport } from '@/lib/reportsApi'
-import { customReportSchema, NEW_CATEGORY, toCustomReportPayload } from '@/schemas/report'
+import { fetchMyProfile } from '@/lib/registryApi'
+import {
+  customReportSchema,
+  NEW_CATEGORY,
+  NO_CATEGORY,
+  toCustomReportPayload,
+} from '@/schemas/report'
 import { fieldErrors } from '@/schemas/auth'
 import { findSpace } from '@/lib/spaces'
 import { paths } from '@/routes/paths'
@@ -27,6 +34,7 @@ const EMPTY = {
   newCategory: '',
   targetType: '',
   targetName: '',
+  targetWorkerId: '',
   locality: null,
   whenMode: 'unknown',
   occurredAt: '',
@@ -56,15 +64,43 @@ export function CustomReportPage() {
     staleTime: 10 * 60_000,
   })
 
+  // Same queryKey as the navbar, so this is a cache hit. Only decides what
+  // the form shows - the server re-checks user_type itself before adding
+  // anything to the catalogue.
+  const profile = useQuery({ queryKey: ['profile'], queryFn: fetchMyProfile })
+  const isSystemAdmin = profile.data?.user_type === 'system_admin'
+
+  const queryClient = useQueryClient()
   const file = useMutation({
     mutationFn: () => submitCustomReport(toCustomReportPayload(key, form)),
+    onSuccess: (data) => {
+      // A system admin's Hook is already a catalogue behaviour; drop the
+      // cached list so step two shows it without waiting out its staleTime.
+      if (data.addedToCatalogue) queryClient.invalidateQueries({ queryKey: ['behaviors', key] })
+    },
   })
 
   if (!space) return <Navigate to={paths.app} replace />
 
   const title = `Hook ${space.possessive}`
 
-  if (file.isSuccess) return <Filed space={space} title={title} subtitle={SUBTITLE} />
+  if (file.isSuccess) {
+    const added = file.data?.addedToCatalogue
+    return (
+      <Filed
+        space={space}
+        title={title}
+        subtitle={SUBTITLE}
+        note={
+          added
+            ? added.created
+              ? `נוסף לרשימת ההתנהגויות תחת "${added.categoryLabel}".`
+              : `הנוסח כבר היה ברשימה, תחת "${added.categoryLabel}" — ה-Hook שויך אליו.`
+            : null
+        }
+      />
+    )
+  }
 
   const set = (patch) => setForm((current) => ({ ...current, ...patch }))
 
@@ -93,6 +129,16 @@ export function CustomReportPage() {
           </p>
         </div>
 
+        {isSystemAdmin && (
+          <p className="mt-5 flex items-start gap-2 rounded-xl bg-[var(--l-soft)]/60 p-3.5 text-[13px] leading-relaxed text-[var(--l-ink)] ring-1 ring-[var(--l-ring)]">
+            <BookPlus size={15} className="mt-0.5 shrink-0 text-[var(--l-primary)]" aria-hidden="true" />
+            <span>
+              כמנהל/ת מערכת, ה-<bdi>Hook</bdi> ייכנס ישירות לרשימת ההתנהגויות, בלי
+              המתנה לאישור. לכן יש לבחור קטגוריה קיימת או לתת שם לקטגוריה חדשה.
+            </span>
+          </p>
+        )}
+
         <form onSubmit={submit} className="mt-6 flex flex-col gap-6" noValidate>
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-[var(--l-ink)]">
@@ -115,6 +161,7 @@ export function CustomReportPage() {
           <CategoryField
             categories={catalogue.data?.categories ?? []}
             loading={catalogue.isPending}
+            direct={isSystemAdmin}
             form={form}
             set={set}
             errors={errors}
@@ -132,6 +179,7 @@ export function CustomReportPage() {
 
           <LocalityPicker
             label="מיקום"
+            required={false}
             value={form.locality}
             onChange={(locality) => set({ locality })}
             error={errors.locality}
@@ -191,16 +239,22 @@ export function CustomReportPage() {
 /* -------------------------------------------------------------- category */
 
 /**
- * The space's existing categories, plus "אחר" with a name of its own.
+ * The space's existing categories, plus "ללא קטגוריה".
  *
  * Asked here because a catalogue behaviour cannot exist without a category,
- * and the reporter knows best what kind of moment it was. The reviewer can
- * still change it at approval.
+ * and the reporter usually knows what kind of moment it was. When they do
+ * not, "ללא קטגוריה" leaves the choice to the reviewer at approval - better
+ * than a guess that has to be corrected anyway.
  */
-function CategoryField({ categories, loading, form, set, errors, disabled }) {
+function CategoryField({ categories, loading, direct, form, set, errors, disabled }) {
+  // `direct`: a system admin, whose Hook goes straight into the catalogue.
+  // "Let the reviewer decide" means nothing when they are the reviewer, so
+  // they get "new category" instead.
   const options = [
     ...categories.map((c) => ({ value: c.key, label: c.label })),
-    { value: NEW_CATEGORY, label: categories.length ? 'אחר' : 'קטגוריה חדשה' },
+    direct
+      ? { value: NEW_CATEGORY, label: 'קטגוריה חדשה' }
+      : { value: NO_CATEGORY, label: 'ללא קטגוריה' },
   ]
 
   return (
@@ -239,7 +293,7 @@ function CategoryField({ categories, loading, form, set, errors, disabled }) {
         </div>
       )}
 
-      {form.category === NEW_CATEGORY && (
+      {direct && form.category === NEW_CATEGORY && (
         <>
           <input
             type="text"
@@ -247,7 +301,7 @@ function CategoryField({ categories, loading, form, set, errors, disabled }) {
             value={form.newCategory}
             disabled={disabled}
             onChange={(event) => set({ newCategory: event.target.value })}
-            placeholder="שם הקטגוריה, לדוגמה: תחבורה ציבורית"
+            placeholder="שם הקטגוריה החדשה, לדוגמה: תחבורה ציבורית"
             aria-label="שם הקטגוריה החדשה"
             aria-invalid={Boolean(errors.newCategory)}
             className={cn(inputClass(errors.newCategory), 'h-10 py-0')}
@@ -289,7 +343,8 @@ function TargetField({ form, set, errors, disabled }) {
                 value={type}
                 checked={selected}
                 disabled={disabled}
-                onChange={() => set({ targetType: type })}
+                // A name typed or picked for one target is wrong for another.
+                onChange={() => set({ targetType: type, targetName: '', targetWorkerId: '' })}
                 className="h-4 w-4 accent-[var(--l-primary)]"
               />
               <Icon size={16} className="text-[var(--l-muted)]" aria-hidden="true" />
@@ -297,11 +352,11 @@ function TargetField({ form, set, errors, disabled }) {
             </label>
 
             {selected && type === 'employee' && (
-              <NameInput
-                value={form.targetName}
-                onChange={(targetName) => set({ targetName })}
-                placeholder="הקלד/י את שם העובד/ת"
-                hint="השם לא מוצג למנהלי הארגון."
+              <WorkerPicker
+                workerId={form.targetWorkerId}
+                name={form.targetName}
+                onPick={(worker) => set({ targetWorkerId: worker.id, targetName: worker.fullName })}
+                onType={(targetName) => set({ targetName, targetWorkerId: '' })}
                 error={errors.targetName}
                 disabled={disabled}
               />
