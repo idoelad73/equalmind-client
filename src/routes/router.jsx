@@ -11,6 +11,7 @@ import { AboutPage } from '@/pages/AboutPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
+import { UnsubscribePage } from '@/pages/UnsubscribePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 
 import { paths, appSegments } from './paths'
@@ -47,6 +48,11 @@ export const router = createBrowserRouter([
   // NOT publicOnly: an invitee arrives already holding a session, and that
   // guard would bounce them into the app before they set a password.
   { path: paths.inviteAccept, element: <InviteAcceptPage /> },
+
+  // NOT publicOnly either, and for a stronger reason: whoever follows this
+  // link usually has no account at all, and the one who does must still be
+  // able to opt out rather than be redirected into the app.
+  { path: paths.unsubscribe(), element: <UnsubscribePage /> },
 
   {
     path: paths.app,

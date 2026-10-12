@@ -62,3 +62,60 @@ export function counterFor(body) {
 export function renderTemplate(template, vars) {
   return String(template ?? '').replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? '')
 }
+
+/** Mirror server/lib/smsProvider.js, which is the authority. */
+export const INVITE_LINK_LINE = 'להרשמה: {url}'
+export const OPT_OUT_LINE = 'להסרה: {optout}'
+
+/**
+ * Complete a template so that no invitation can ship without the two
+ * things every invitation needs: a way to act on it, and a way to stop it.
+ *
+ * Both lines are ADDED rather than the template rejected. Nothing an admin
+ * wrote is lost, and because the preview and the send both go through
+ * here, what they approved is what goes out.
+ *
+ * Detecting an existing opt-out by the word הסר is deliberately loose: an
+ * admin who wrote their own wording keeps it, and a missed line is a
+ * smaller problem than two opt-outs in one message.
+ *
+ * WHAT IS NOT TRUE YET: nothing reads replies. There is no inbound SMS
+ * handler, no suppression list, and no check before a send - the line
+ * tells people to reply "הסר" and nobody is listening. Israel's
+ * Communications Law s.30A requires the opt-out to be offered AND
+ * honoured, at up to NIS 1,000 per message with no proof of damage, so
+ * this is a stopgap for testing rather than a compliant send. A working
+ * version needs a suppression table, something that receives replies (or
+ * an opt-out LINK, which needs no inbound channel at all), and a check in
+ * sendInvitations.
+ */
+export function completeTemplate(template) {
+  let text = String(template ?? '').trim()
+
+  if (!text.includes('{url}')) {
+    text = text ? `${text}\n${INVITE_LINK_LINE}` : INVITE_LINK_LINE
+  }
+  if (!text.includes('{optout}')) {
+    text = `${text}\n${OPT_OUT_LINE}`
+  }
+
+  return text
+}
+
+/**
+ * The body a phone will receive, from what is in the editor right now.
+ *
+ * Counting the template instead of this is the bug it replaces: {url} is
+ * five characters, the link is about forty-five, and the gap is a whole
+ * extra segment that only appears on the bill.
+ */
+export function bodyFor(template, { organizationName, inviteUrl, optOutUrl }) {
+  return renderTemplate(completeTemplate(template), {
+    org: organizationName ?? '',
+    url: inviteUrl ?? '',
+    // A sample of the real length. Each recipient gets their own token,
+    // so there is no single true value here - only a true LENGTH, which
+    // is what the counter needs.
+    optout: optOutUrl ?? '',
+  })
+}

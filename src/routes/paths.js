@@ -10,6 +10,9 @@ export const paths = {
   login: '/login',
   register: '/register',
   inviteAccept: '/invite/accept',
+  // Short on purpose: it rides inside an SMS, where a Hebrew message
+  // carries 70 characters per segment and every one is billed.
+  unsubscribe: (token = ':token') => `/u/${token}`,
 
   app: '/app',
   space: (key = ':space') => `/app/space/${key}`,

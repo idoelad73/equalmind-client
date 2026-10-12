@@ -1,6 +1,6 @@
 import { AlertTriangle, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { counterFor, MAX_TEMPLATE_LENGTH } from '@/lib/smsText'
+import { bodyFor, counterFor, MAX_TEMPLATE_LENGTH } from '@/lib/smsText'
 
 /**
  * The invitation text, with a counter that reports what it will cost.
@@ -21,10 +21,19 @@ export function SmsTemplateField({
   disabled = false,
   error,
   organizationName = 'הארגון',
+  inviteUrl = '',
+  optOutUrl = '',
   label = 'הודעת ההזמנה',
   hint,
 }) {
-  const counter = counterFor(value)
+  // The counter measures the RENDERED message, not the template. A
+  // template is not what anyone is billed for.
+  const counter = counterFor(bodyFor(value, { organizationName, inviteUrl, optOutUrl }))
+  const text = String(value ?? '')
+  const added = [
+    !text.includes('{url}') && 'קישור ההרשמה',
+    !text.includes('{optout}') && 'קישור ההסרה',
+  ].filter(Boolean)
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -54,6 +63,17 @@ export function SmsTemplateField({
       </div>
 
       {hint && <p className="text-xs leading-relaxed text-slate-500">{hint}</p>}
+
+      {added.length > 0 && (
+        <p className="text-xs leading-relaxed text-slate-500">
+          {added.join(' ו')} {added.length > 1 ? 'יתווספו' : 'יתווסף'} אוטומטית בסוף
+          ההודעה. אפשר למקם את הקישור בעצמך עם{' '}
+          <code className="rounded bg-slate-100 px-1 font-mono">{'{url}'}</code>, ולנסח
+          ואת ההסרה עם{' '}
+          <code className="rounded bg-slate-100 px-1 font-mono">{'{optout}'}</code>. כל
+          נמען/ת מקבל/ת קישור הסרה אישי.
+        </p>
+      )}
 
       <textarea
         id="sms-template"

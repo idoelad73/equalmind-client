@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SmsTemplateField } from '@/components/org/SmsTemplateField'
-import { counterFor } from '@/lib/smsText'
+import { bodyFor, counterFor } from '@/lib/smsText'
 import { fetchTemplate, notifyRoster, saveTemplate } from '@/lib/rosterApi'
 import { LANDING_VARS } from '@/pages/landingPalettes'
 
@@ -114,7 +114,14 @@ export function NotifyModal({
 
   if (!open) return null
 
-  const counter = counterFor(draft)
+  // Both the counter and the preview measure the rendered message, so the
+  // number on screen is the number the gateway bills.
+  const sent = bodyFor(draft, {
+    organizationName: template.data?.organization,
+    inviteUrl: template.data?.inviteUrl,
+    optOutUrl: template.data?.optOutUrlSample,
+  })
+  const counter = counterFor(sent)
   const result = send.data
   const recipients = plan.data?.recipients ?? 0
   // What the chosen option covers in total, which is not the same as what
@@ -199,6 +206,8 @@ export function NotifyModal({
                   value={draft}
                   disabled={send.isPending || save.isPending}
                   organizationName={template.data?.organization}
+                  inviteUrl={template.data?.inviteUrl}
+                  optOutUrl={template.data?.optOutUrlSample}
                   onChange={(next) => {
                     setDraft(next)
                     setDirty(true)
@@ -207,12 +216,9 @@ export function NotifyModal({
                 />
               </div>
 
-              <Preview
-                organizationName={template.data?.organization}
-                stored={template.data}
-                draft={draft}
-                dirty={dirty}
-              />
+              {/* While editing, what the draft renders to; otherwise the
+                  server's own preview, which is the authority. */}
+              <Preview body={dirty ? sent : (template.data?.preview ?? '')} />
 
               {dirty && (
                 <button
@@ -301,6 +307,13 @@ function Recipients({ plan, selectedCount = null }) {
         </p>
       )}
 
+      {plan.optedOut > 0 && (
+        <p className="text-xs leading-relaxed text-slate-500">
+          {plan.optedOut} ביקשו לא לקבל הודעות ולא ייכללו בשליחה. בקשת הסרה נשמרת לצמיתות
+          וחלה גם אחרי טעינה מחדש של הרשימה.
+        </p>
+      )}
+
       {plan.unreachable > 0 && (
         <p className="text-xs leading-relaxed text-slate-500">
           {plan.unreachable} ברשימה ללא מספר שמור — לא ניתן לשלוח אליהם. טעינה מחדש של
@@ -321,15 +334,7 @@ function Recipients({ plan, selectedCount = null }) {
 }
 
 /** Exactly what a handset will show, with the placeholders filled. */
-function Preview({ organizationName, stored, draft, dirty }) {
-  // The server rendered the stored template; an edited draft is rendered
-  // here so the preview keeps up with typing.
-  const body = dirty
-    ? (draft.trim() || stored?.defaultTemplate || '')
-        .replace(/\{org\}/g, organizationName ?? '')
-        .replace(/\{url\}/g, 'https://…')
-    : (stored?.preview ?? '')
-
+function Preview({ body }) {
   return (
     <div className="mt-4">
       <p className="text-xs font-semibold text-slate-700">תצוגה מקדימה</p>
