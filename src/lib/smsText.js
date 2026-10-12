@@ -65,29 +65,29 @@ export function renderTemplate(template, vars) {
 
 /** Mirror server/lib/smsProvider.js, which is the authority. */
 export const INVITE_LINK_LINE = 'להרשמה: {url}'
+/** Not appended automatically - mirrors the server. */
 export const OPT_OUT_LINE = 'להסרה: {optout}'
 
 /**
- * Complete a template so that no invitation can ship without the two
- * things every invitation needs: a way to act on it, and a way to stop it.
+ * Complete a template so that no invitation ships without a way to act on
+ * it. Only the registration link is added - writing a template without
+ * {url} is an easy mistake and an invisible one, since there is nothing
+ * left in the preview to miss.
  *
- * Both lines are ADDED rather than the template rejected. Nothing an admin
+ * MUST STAY IN STEP WITH server/lib/smsProvider.js, which is the
+ * authority. The line is ADDED rather than the template rejected. Nothing an admin
  * wrote is lost, and because the preview and the send both go through
  * here, what they approved is what goes out.
  *
- * Detecting an existing opt-out by the word הסר is deliberately loose: an
- * admin who wrote their own wording keeps it, and a missed line is a
- * smaller problem than two opt-outs in one message.
- *
- * WHAT IS NOT TRUE YET: nothing reads replies. There is no inbound SMS
- * handler, no suppression list, and no check before a send - the line
- * tells people to reply "הסר" and nobody is listening. Israel's
- * Communications Law s.30A requires the opt-out to be offered AND
- * honoured, at up to NIS 1,000 per message with no proof of damage, so
- * this is a stopgap for testing rather than a compliant send. A working
- * version needs a suppression table, something that receives replies (or
- * an opt-out LINK, which needs no inbound channel at all), and a check in
- * sendInvitations.
+ * NO OPT-OUT LINE IS ADDED. This message invites an employee to register
+ * for a tool their own employer has adopted; it sells nothing and asks for
+ * nothing, so it is not a דבר פרסומת and Communications Law s.30A does not
+ * reach it. That is a judgement about THIS message - anything that becomes
+ * promotional needs the opt-out back, and the machinery is still here for
+ * it: put {optout} in a template and every recipient gets a personal
+ * unsubscribe link (lib/optOut.js, migration 030). Opt-outs already
+ * recorded are still honoured on every send - see SENDABLE in
+ * org.controller.js.
  */
 export function completeTemplate(template) {
   let text = String(template ?? '').trim()
@@ -95,10 +95,6 @@ export function completeTemplate(template) {
   if (!text.includes('{url}')) {
     text = text ? `${text}\n${INVITE_LINK_LINE}` : INVITE_LINK_LINE
   }
-  if (!text.includes('{optout}')) {
-    text = `${text}\n${OPT_OUT_LINE}`
-  }
-
   return text
 }
 

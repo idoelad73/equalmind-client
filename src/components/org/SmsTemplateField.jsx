@@ -30,10 +30,7 @@ export function SmsTemplateField({
   // template is not what anyone is billed for.
   const counter = counterFor(bodyFor(value, { organizationName, inviteUrl, optOutUrl }))
   const text = String(value ?? '')
-  const added = [
-    !text.includes('{url}') && 'קישור ההרשמה',
-    !text.includes('{optout}') && 'קישור ההסרה',
-  ].filter(Boolean)
+  const linkAdded = !text.includes('{url}')
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -64,14 +61,12 @@ export function SmsTemplateField({
 
       {hint && <p className="text-xs leading-relaxed text-slate-500">{hint}</p>}
 
-      {added.length > 0 && (
+      {linkAdded && (
         <p className="text-xs leading-relaxed text-slate-500">
-          {added.join(' ו')} {added.length > 1 ? 'יתווספו' : 'יתווסף'} אוטומטית בסוף
-          ההודעה. אפשר למקם את הקישור בעצמך עם{' '}
-          <code className="rounded bg-slate-100 px-1 font-mono">{'{url}'}</code>, ולנסח
-          ואת ההסרה עם{' '}
-          <code className="rounded bg-slate-100 px-1 font-mono">{'{optout}'}</code>. כל
-          נמען/ת מקבל/ת קישור הסרה אישי.
+          קישור ההרשמה יתווסף אוטומטית בסוף ההודעה. אפשר למקם אותו בעצמך עם{' '}
+          <code className="rounded bg-slate-100 px-1 font-mono">{'{url}'}</code>, ולהוסיף
+          קישור הסרה אישי עם{' '}
+          <code className="rounded bg-slate-100 px-1 font-mono">{'{optout}'}</code>.
         </p>
       )}
 
