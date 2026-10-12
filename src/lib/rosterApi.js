@@ -94,15 +94,27 @@ export function inspectCsvHeader(text) {
 
 /* ------------------------------------------------------------ invitations */
 
-/** The organisation's invitation text, with the rendered preview and cost. */
-export async function fetchTemplate() {
-  const { data } = await api.get('/org/template')
+/**
+ * The organisation's invitation text, with the rendered preview and cost.
+ *
+ * `organizationId` is for Equalmind staff, who have no organisation of
+ * their own and must name one. It is ignored for an org admin, who gets
+ * their own either way - the server does not read it for them.
+ */
+export async function fetchTemplate(organizationId) {
+  const { data } = await api.get('/org/template', {
+    params: organizationId ? { organizationId } : undefined,
+  })
   return data
 }
 
 /** `null` clears it, falling back to the built-in default. */
-export async function saveTemplate(template) {
-  const { data } = await api.put('/org/template', { template })
+export async function saveTemplate(template, organizationId) {
+  const { data } = await api.put(
+    '/org/template',
+    { template },
+    { params: organizationId ? { organizationId } : undefined },
+  )
   return data
 }
 

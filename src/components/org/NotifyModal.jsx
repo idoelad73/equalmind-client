@@ -52,7 +52,11 @@ export function NotifyModal({
   const [audience, setAudience] = useState('new')
   const dialogRef = useRef(null)
 
-  const template = useQuery({ queryKey: ['sms-template'], queryFn: fetchTemplate, enabled: open })
+  const template = useQuery({
+    queryKey: ['sms-template', organizationId],
+    queryFn: () => fetchTemplate(organizationId),
+    enabled: open,
+  })
 
   // Dry run: what would be sent, to how many, at what cost.
   // staleTime 0: the dialog often opens straight after an import, so the
@@ -69,7 +73,7 @@ export function NotifyModal({
   })
 
   const save = useMutation({
-    mutationFn: () => saveTemplate(draft.trim() || null),
+    mutationFn: () => saveTemplate(draft.trim() || null, organizationId),
     onSuccess: () => {
       setDirty(false)
       template.refetch()
@@ -80,7 +84,7 @@ export function NotifyModal({
   const send = useMutation({
     mutationFn: async () => {
       // Saved first, so what was reviewed is what goes out.
-      if (dirty) await saveTemplate(draft.trim() || null)
+      if (dirty) await saveTemplate(draft.trim() || null, organizationId)
       return notifyRoster({ dryRun: false, resend: audience === 'all', organizationId, since })
     },
   })
