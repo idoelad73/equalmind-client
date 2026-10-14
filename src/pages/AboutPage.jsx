@@ -1,5 +1,6 @@
 import { Flag, Megaphone, MousePointerClick, ShieldCheck, Sparkles } from 'lucide-react'
 import { CommunityBackdrop } from '@/components/decor/CommunityBackdrop'
+import { BackToHome } from '@/components/ui/BackToHome'
 
 const HOW_IT_WORKS = [
   {
@@ -39,6 +40,12 @@ export function AboutPage() {
   return (
     <div className="relative -mx-4 -my-8 overflow-hidden bg-white px-4 py-12 sm:px-8">
       <CommunityBackdrop />
+
+      {/* Outside the article, which has a 14-unit gap between sections -
+          inside it, the link would sit a long way from the title. */}
+      <div className="relative mx-auto mb-6 max-w-2xl">
+        <BackToHome className="-ms-3" />
+      </div>
 
       <article className="relative mx-auto flex max-w-2xl flex-col gap-14">
         {/* ---- what it is ---- */}

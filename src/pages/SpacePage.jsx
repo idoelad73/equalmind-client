@@ -3,14 +3,22 @@ import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-
 import { useQuery } from '@tanstack/react-query'
 import {
   Armchair,
+  Briefcase,
   Building2,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  ClipboardList,
   Image as ImageIcon,
   List,
   Loader2,
+  MessagesSquare,
+  Sparkles,
+  Headset,
   Search,
+  Shirt,
+  ShoppingBag,
+  Store,
   Tag,
   Users,
 } from 'lucide-react'
@@ -25,10 +33,24 @@ import { paths } from '@/routes/paths'
  * a category in the database cannot silently change which icon appears.
  */
 const CATEGORY_ICONS = {
+  // מרחב קהילה
   public_spaces: Users,
   physical_infrastructure: Armchair,
   municipal_services: Building2,
   sexist_content: ImageIcon,
+
+  // מרחב צריכה (migration 031)
+  store_environment: Store,
+  product_access: ShoppingBag,
+  customer_service: Headset,
+
+  // מרחב עבודה (migration 032)
+  meetings: MessagesSquare,
+  one_on_one: Users,
+  physical_space: Shirt,
+  org_culture: Sparkles,
+  field_work: Briefcase,
+  general_conduct: ClipboardList,
 }
 
 /** Steps one and two: pick a category, then a behaviour within it. */

@@ -36,13 +36,69 @@ const momentFields = {
   notes: optionalText(1000),
 }
 
-export const reportDetailsSchema = z.object({
+/** Who a Hook is about. Mirrors the server's own fields. */
+const targetFields = {
+  targetType: z.string().optional(),
+  targetName: optionalText(120),
+  targetWorkerId: z.string().optional(),
+}
+
+const detailsShape = {
   behaviorId: z.uuid('התנהגות לא תקינה'),
   ...momentFields,
   // After the spread, so it overrides the optional one above.
   locality: locality.refine((v) => v !== null, {
     message: 'יש לבחור יישוב או להשתמש בזיהוי מיקום',
   }),
+  ...targetFields,
+}
+
+export const reportDetailsSchema = z.object(detailsShape)
+
+/**
+ * The same form, with the work space's extra rule: a work Hook is about
+ * someone, so it must say who.
+ *
+ * A function of the space rather than one schema with a space field,
+ * because the space is already in the URL and in the catalogue row - and
+ * a copy of it inside the submitted data would be a third place for it to
+ * disagree with the other two. The server applies the same rule from the
+ * behaviour row, which is the one that actually decides.
+ */
+export function reportDetailsSchemaFor(space) {
+  if (space === 'consumption') return consumptionDetailsSchema
+  if (space !== 'work') return reportDetailsSchema
+
+  return z
+    .object(detailsShape)
+    .refine((v) => Boolean(v.targetType), {
+      message: 'יש לציין על מי או על מה ה-Hook',
+      path: ['targetType'],
+    })
+    .refine((v) => v.targetType !== 'employee' || v.targetWorkerId || v.targetName, {
+      message: 'יש לבחור עובד/ת מהרשימה או להקליד שם',
+      path: ['targetName'],
+    })
+}
+
+/**
+ * מרחב הצריכה: the report is about a BUSINESS, so that is the required
+ * field and the locality is not asked for - the picked business brings its
+ * town along (see toReportPayload). Mirrors createReport on the server,
+ * which applies the same rule from the behaviour's space.
+ *
+ * `business` is { name, address?, city?, id? }: a search pick fills all of
+ * it, a typed name only `name`.
+ */
+const consumptionDetailsSchema = z.object({
+  behaviorId: z.uuid('התנהגות לא תקינה'),
+  ...momentFields,
+  business: z
+    .looseObject({ name: z.string().trim().min(2, 'יש למלא את שם העסק').max(120) })
+    .nullable()
+    .refine((v) => v !== null, { message: 'יש למלא את שם העסק' }),
+  staffName: optionalText(120),
+  placeText: optionalText(200),
 })
 
 /** Who a custom Hook is about. Mirrors TARGET_TYPES on the server. */
@@ -116,7 +172,45 @@ export function toReportPayload(form, photoPublicId) {
   return {
     behaviorId: form.behaviorId,
     ...momentPayload(form),
+    ...targetPayload(form),
+    ...businessPayload(form),
     photoPublicId: photoPublicId || undefined,
+  }
+}
+
+/**
+ * The consumption form's fields. The business goes as a business target;
+ * a searched-and-picked one also fills the locality with its town, so the
+ * aggregate "where" picture keeps working without asking twice. A typed
+ * name carries no town, and the locality is then simply left out.
+ */
+function businessPayload(form) {
+  if (!form.business) return {}
+  const { name, address, city } = form.business
+  return {
+    targetType: 'business',
+    targetName: name.trim(),
+    ...(address ? { businessAddress: address } : null),
+    ...(city && !form.locality ? { localityName: city } : null),
+    ...(form.staffName?.trim() ? { staffName: form.staffName.trim() } : null),
+    ...(form.placeText?.trim() ? { placeText: form.placeText.trim() } : null),
+  }
+}
+
+/**
+ * The target, when the form collected one.
+ *
+ * A picked colleague sends the id AND the name; the server ignores the
+ * name and re-reads it from its own list, so the two cannot be made to
+ * disagree. The name is still sent because it is what a typed-in,
+ * not-on-the-list person has instead.
+ */
+function targetPayload(form) {
+  if (!form.targetType) return {}
+  return {
+    targetType: form.targetType,
+    ...(form.targetName ? { targetName: form.targetName.trim() } : null),
+    ...(form.targetWorkerId ? { targetWorkerId: form.targetWorkerId } : null),
   }
 }
 

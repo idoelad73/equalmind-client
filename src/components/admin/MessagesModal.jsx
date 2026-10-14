@@ -18,9 +18,11 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { approveMessage, denyMessage, fetchMessages } from '@/lib/messagesApi'
+import { invalidateAfterReview } from '@/lib/reviewCache'
 import { fetchBehaviors } from '@/lib/reportsApi'
 import { NEW_CATEGORY } from '@/schemas/report'
-import { LocalityPicker } from '@/components/ui/LocalityPicker'
+import { Field, HookFormFields } from '@/components/admin/HookFormFields'
+import { field, hookToForm } from '@/lib/hookForm'
 import { CommunityBackdrop } from '@/components/decor/CommunityBackdrop'
 import { LANDING_VARS } from '@/pages/landingPalettes'
 
@@ -61,14 +63,6 @@ const EDIT_LABELS = {
   notes: 'פרטים',
 }
 
-/** An <input type="datetime-local"> value for a stored timestamp. */
-function toLocalInput(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 /**
  * Review Hooks filed outside the catalogue.
  *
@@ -94,12 +88,7 @@ export function MessagesModal({ open, onClose }) {
       action === 'approve' ? approveMessage(id, changes) : denyMessage(id),
     onSuccess: (_data, { action, space }) => {
       list.refetch()
-      // An approval adds to the catalogue; drop the cached copy so the
-      // wizard shows the new behaviour without waiting out its staleTime.
-      if (action === 'approve') queryClient.invalidateQueries({ queryKey: ['behaviors', space] })
-      // The badge is a separate query; without this it keeps the old number
-      // until its next poll, which reads as the click not having worked.
-      queryClient.invalidateQueries({ queryKey: ['message-count'] })
+      invalidateAfterReview(queryClient, { space: action === 'approve' ? space : undefined })
     },
   })
 
@@ -207,12 +196,14 @@ export function MessagesModal({ open, onClose }) {
             <ul className="flex flex-col gap-3">
               {messages.map((message) => (
                 <MessageCard
-                  key={message.message_id}
+                  key={message.id}
                   message={message}
                   busy={decide.isPending}
                   onDecide={(action, changes) =>
                     decide.mutate({
-                      id: message.message_id,
+                      // The REPORT's id: the queue is reports, and the
+                      // decision row may not exist yet.
+                      id: message.id,
                       action,
                       changes,
                       space: message.space,
@@ -369,11 +360,17 @@ function EditedNote({ edits }) {
 /**
  * The whole Hook, laid open for the reviewer.
  *
+ * The fields are the shared HookFormFields - the same component the Hooks
+ * list's edit dialog uses - so the two staff screens that edit a Hook cannot
+ * drift apart. What is particular to approval is added on top: the
+ * catalogue category (in the component's first section), what "ready"
+ * means, and what is sent.
+ *
  * Two different things are being edited here and it is worth knowing
  * which is which. The wording and the category become a row in
  * public.behaviors - a catalogue entry everyone will see from now on.
- * Everything below them edits THIS REPORT: one person's account of
- * something that happened to them. The server records the previous value
+ * Everything in the second section edits THIS REPORT: one person's account
+ * of something that happened to them. The server records the previous value
  * of every field it changes (messages.edits, migration 029), so a
  * correction is a correction and not a quiet rewrite.
  *
@@ -382,23 +379,29 @@ function EditedNote({ edits }) {
  * changed is one bookkeeping mistake away from silently dropping an edit.
  */
 function ApprovePanel({ message, busy, onCancel, onConfirm }) {
+  // Only a Hook whose wording is NOT in the catalogue needs a category:
+  // approving that one creates a behaviors row, and a row cannot exist
+  // without a category. A Hook filed against an existing behaviour adds
+  // nothing, so demanding a category for it left the button permanently
+  // disabled - the reviewer could read it but never act on it.
+  const needsCatalogue = message.needs_catalogue !== false
+
   const [form, setForm] = useState(() => ({
-    name: message.new_hook_text ?? '',
-    space: message.space ?? '',
+    // The shared fields' shape (lib/hookForm.js). The queue calls the
+    // wording new_hook_text where a report calls it behavior_name.
+    ...hookToForm({ ...message, behavior_name: message.new_hook_text }),
     category: message.category_key ?? (message.category_is_new ? NEW_CATEGORY : ''),
     newCategory: message.category_is_new ? (message.category_label ?? '') : '',
-    targetType: message.target_type ?? '',
-    targetName: message.target_name ?? '',
-    locality: message.locality_name
-      ? { code: message.locality_code ?? null, name: message.locality_name }
-      : null,
-    whenMode: message.occurred_at ? 'exact' : message.occurred_text ? 'text' : 'none',
-    occurredAt: toLocalInput(message.occurred_at),
-    occurredText: message.occurred_text ?? '',
-    notes: message.notes ?? '',
   }))
 
-  const set = (patch) => setForm((prev) => ({ ...prev, ...patch }))
+  // The categories belong to a space, so changing it invalidates whatever
+  // was chosen - better cleared than silently wrong.
+  const set = (patch) =>
+    setForm((prev) => ({
+      ...prev,
+      ...patch,
+      ...('space' in patch && patch.space !== prev.space ? { category: '', newCategory: '' } : null),
+    }))
 
   const catalogue = useQuery({
     queryKey: ['behaviors', form.space],
@@ -408,14 +411,15 @@ function ApprovePanel({ message, busy, onCancel, onConfirm }) {
   })
   const categories = catalogue.data?.categories ?? []
 
-  const name = form.name.trim()
+  const name = form.behaviorName.trim()
   const newCategory = form.newCategory.trim()
   const targetName = form.targetName.trim()
 
   const ready =
     name.length >= 3 &&
     Boolean(form.space) &&
-    (form.category === NEW_CATEGORY ? newCategory.length >= 2 : Boolean(form.category)) &&
+    (!needsCatalogue ||
+      (form.category === NEW_CATEGORY ? newCategory.length >= 2 : Boolean(form.category))) &&
     // Mirrors reports_employee_has_name: a Hook about an employee with no
     // name is about nobody, and the database refuses it.
     (form.targetType !== 'employee' || targetName.length > 0)
@@ -423,9 +427,14 @@ function ApprovePanel({ message, busy, onCancel, onConfirm }) {
   function confirm() {
     onConfirm({
       name,
-      ...(form.category === NEW_CATEGORY
-        ? { categoryLabel: newCategory }
-        : { categoryKey: form.category }),
+      // Sent only when it means something. For a Hook already in the
+      // catalogue the server ignores it anyway, but sending a category it
+      // will not use invites someone to believe it was applied.
+      ...(needsCatalogue
+        ? form.category === NEW_CATEGORY
+          ? { categoryLabel: newCategory }
+          : { categoryKey: form.category }
+        : null),
       space: form.space,
       ...(form.targetType ? { targetType: form.targetType } : null),
       targetName: targetName || null,
@@ -442,185 +451,59 @@ function ApprovePanel({ message, busy, onCancel, onConfirm }) {
     })
   }
 
-  const field =
-    'w-full rounded-lg border border-[var(--l-ring)] bg-white px-3 text-sm text-[var(--l-ink)] outline-none focus:border-[var(--l-primary)]'
-
   return (
     <div className="mt-4 flex flex-col gap-4 rounded-xl bg-[var(--l-soft)]/50 p-4 ring-1 ring-[var(--l-ring)]">
       <p className="flex items-center gap-1.5 text-sm font-bold text-[var(--l-ink)]">
         <BookPlus size={15} className="text-[var(--l-primary)]" aria-hidden="true" />
-        אישור ועריכת ה-Hook
+        {needsCatalogue ? 'אישור, הוספה לרשימה ועריכה' : 'אישור ועריכת ה-Hook'}
       </p>
 
-      {/* ---- becomes a catalogue row ---- */}
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-xs font-semibold text-[var(--l-primary)]">
-          נוסף לרשימת ההתנהגויות
-        </legend>
-
-        <Field label="נוסח ההתנהגות">
-          <input
-            type="text"
-            maxLength={200}
-            value={form.name}
-            disabled={busy}
-            onChange={(event) => set({ name: event.target.value })}
-            className={cn(field, 'h-10')}
-          />
-        </Field>
-
-        <Field label="מרחב">
-          <select
-            value={form.space}
-            disabled={busy}
-            // The categories belong to a space, so changing it invalidates
-            // whatever was chosen - better cleared than silently wrong.
-            onChange={(event) =>
-              set({ space: event.target.value, category: '', newCategory: '' })
-            }
-            className={cn(field, 'h-10')}
-          >
-            <option value="" disabled>
-              בחר/י מרחב
-            </option>
-            {Object.entries(SPACES).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
+      <HookFormFields
+        form={form}
+        set={set}
+        disabled={busy}
+        firstLegend={
+          needsCatalogue ? 'נוסף לרשימת ההתנהגויות' : 'ההתנהגות כבר ברשימה'
+        }
+        wordingLabel="נוסח ההתנהגות"
+        detailsLegend="פרטי ה-Hook — עריכה משנה את הדיווח עצמו"
+      >
+        {needsCatalogue && (
+          <>
+          <Field label="קטגוריה">
+            <select
+              value={form.category}
+              disabled={busy || !form.space || catalogue.isPending}
+              onChange={(event) => set({ category: event.target.value })}
+              className={cn(field, 'h-10')}
+            >
+              <option value="" disabled>
+                {catalogue.isPending ? 'טוען…' : 'בחר/י קטגוריה'}
               </option>
-            ))}
-          </select>
-        </Field>
+              {categories.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+              <option value={NEW_CATEGORY}>קטגוריה חדשה…</option>
+            </select>
+          </Field>
 
-        <Field label="קטגוריה">
-          <select
-            value={form.category}
-            disabled={busy || !form.space || catalogue.isPending}
-            onChange={(event) => set({ category: event.target.value })}
-            className={cn(field, 'h-10')}
-          >
-            <option value="" disabled>
-              {catalogue.isPending ? 'טוען…' : 'בחר/י קטגוריה'}
-            </option>
-            {categories.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-            <option value={NEW_CATEGORY}>קטגוריה חדשה…</option>
-          </select>
-        </Field>
-
-        {form.category === NEW_CATEGORY && (
-          <input
-            type="text"
-            maxLength={80}
-            value={form.newCategory}
-            disabled={busy}
-            onChange={(event) => set({ newCategory: event.target.value })}
-            placeholder="שם הקטגוריה החדשה"
-            aria-label="שם הקטגוריה החדשה"
-            className={cn(field, 'h-10')}
-          />
-        )}
-      </fieldset>
-
-      {/* ---- edits the report itself ---- */}
-      <fieldset className="flex flex-col gap-3 border-t border-[var(--l-ring)] pt-4">
-        <legend className="mb-1 text-xs font-semibold text-slate-600">
-          פרטי ה-Hook — עריכה משנה את הדיווח עצמו
-        </legend>
-
-        <Field label="על מי">
-          <select
-            value={form.targetType}
-            disabled={busy}
-            onChange={(event) => set({ targetType: event.target.value })}
-            className={cn(field, 'h-10')}
-          >
-            <option value="" disabled>
-              בחר/י
-            </option>
-            {Object.entries(TARGETS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        {(form.targetType === 'employee' || form.targetType === 'business') && (
-          <Field
-            label={form.targetType === 'employee' ? 'שם העובד/ת' : 'שם בית העסק'}
-            hint={form.targetType === 'employee' ? 'חובה' : undefined}
-          >
+          {form.category === NEW_CATEGORY && (
             <input
               type="text"
-              maxLength={120}
-              value={form.targetName}
+              maxLength={80}
+              value={form.newCategory}
               disabled={busy}
-              onChange={(event) => set({ targetName: event.target.value })}
+              onChange={(event) => set({ newCategory: event.target.value })}
+              placeholder="שם הקטגוריה החדשה"
+              aria-label="שם הקטגוריה החדשה"
               className={cn(field, 'h-10')}
             />
-          </Field>
+          )}
+          </>
         )}
-
-        <LocalityPicker
-          label="מיקום"
-          required={false}
-          value={form.locality}
-          disabled={busy}
-          onChange={(locality) => set({ locality })}
-        />
-
-        <Field label="מתי">
-          <select
-            value={form.whenMode}
-            disabled={busy}
-            onChange={(event) => set({ whenMode: event.target.value })}
-            className={cn(field, 'h-10')}
-          >
-            <option value="none">לא צוין</option>
-            <option value="exact">תאריך ושעה</option>
-            <option value="text">טקסט חופשי</option>
-          </select>
-        </Field>
-
-        {form.whenMode === 'exact' && (
-          <input
-            type="datetime-local"
-            value={form.occurredAt}
-            disabled={busy}
-            onChange={(event) => set({ occurredAt: event.target.value })}
-            aria-label="תאריך ושעה"
-            className={cn(field, 'h-10')}
-            dir="ltr"
-          />
-        )}
-
-        {form.whenMode === 'text' && (
-          <input
-            type="text"
-            maxLength={120}
-            value={form.occurredText}
-            disabled={busy}
-            onChange={(event) => set({ occurredText: event.target.value })}
-            placeholder="למשל: בשבוע שעבר"
-            aria-label="מתי זה קרה"
-            className={cn(field, 'h-10')}
-          />
-        )}
-
-        <Field label="פרטים">
-          <textarea
-            rows={3}
-            maxLength={1000}
-            value={form.notes}
-            disabled={busy}
-            onChange={(event) => set({ notes: event.target.value })}
-            className={cn(field, 'resize-y py-2 leading-relaxed')}
-          />
-        </Field>
-      </fieldset>
+      </HookFormFields>
 
       <div className="flex gap-2.5">
         <button
@@ -634,7 +517,7 @@ function ApprovePanel({ message, busy, onCancel, onConfirm }) {
           ) : (
             <Check size={15} aria-hidden="true" />
           )}
-          אישור והוספה
+          {needsCatalogue ? 'אישור והוספה' : 'אישור'}
         </button>
         <button
           type="button"
@@ -646,18 +529,6 @@ function ApprovePanel({ message, busy, onCancel, onConfirm }) {
         </button>
       </div>
     </div>
-  )
-}
-
-function Field({ label, hint, children }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-slate-600">
-        {label}
-        {hint && <span className="text-slate-400"> ({hint})</span>}
-      </span>
-      {children}
-    </label>
   )
 }
 

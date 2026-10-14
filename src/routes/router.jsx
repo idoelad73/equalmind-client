@@ -7,12 +7,14 @@ import { SpacePage } from '@/pages/SpacePage'
 import { ReportDetailsPage } from '@/pages/ReportDetailsPage'
 import { CustomReportPage } from '@/pages/CustomReportPage'
 import { ProfilePage } from '@/pages/ProfilePage'
+import { FlagsPage } from '@/pages/FlagsPage'
 import { AboutPage } from '@/pages/AboutPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { InviteAcceptPage } from '@/pages/InviteAcceptPage'
 import { UnsubscribePage } from '@/pages/UnsubscribePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { HooksPage } from '@/pages/HooksPage'
 
 import { paths, appSegments } from './paths'
 import { RequireAuth, RedirectIfAuthenticated } from './guards'
@@ -66,7 +68,12 @@ export const router = createBrowserRouter([
       { path: appSegments.space, element: <SpacePage /> },
       { path: appSegments.customReport, element: <CustomReportPage /> },
       { path: appSegments.reportDetails, element: <ReportDetailsPage /> },
+      { path: appSegments.flags, element: <FlagsPage /> },
       { path: appSegments.profile, element: <ProfilePage /> },
+      // Staff only, enforced by the API behind it: the page reports a
+      // 403 rather than rendering an empty list, so "nothing here" and
+      // "not allowed here" do not look the same.
+      { path: appSegments.hooks, element: <HooksPage /> },
       { path: appSegments.about, element: <AboutPage /> },
       {
         path: appSegments.coach,

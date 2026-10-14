@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Image as ImageIcon, Info, Loader2, Send, Upload, X } from 'lucide-react'
+import { Image as ImageIcon, Info, Loader2, MapPin, Send, Upload, UserRound, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WizardCard, WizardShell } from '@/components/report/WizardShell'
 import { Filed, WhenField } from '@/components/report/ReportParts'
 import { LocalityPicker } from '@/components/ui/LocalityPicker'
+import { TargetField, WORK_TARGETS } from '@/components/report/TargetField'
+import { BusinessPicker } from '@/components/report/BusinessPicker'
 import { fetchBehaviors, submitReport, uploadPhoto } from '@/lib/reportsApi'
-import { reportDetailsSchema, toReportPayload } from '@/schemas/report'
+import { reportDetailsSchemaFor, toReportPayload } from '@/schemas/report'
 import { fieldErrors } from '@/schemas/auth'
 import { findSpace } from '@/lib/spaces'
 import { paths } from '@/routes/paths'
@@ -18,6 +20,15 @@ const EMPTY = {
   occurredAt: '',
   occurredText: '',
   notes: '',
+  // Collected in the work space only - see WORK_TARGETS below.
+  targetType: '',
+  targetName: '',
+  targetWorkerId: '',
+  // Collected in the consumption space only: the business replaces the
+  // locality as the required "where" there.
+  business: null,
+  staffName: '',
+  placeText: '',
 }
 
 /** Step three: the remaining details, then file the report. */
@@ -84,7 +95,9 @@ export function ReportDetailsPage() {
   function submit(event) {
     event.preventDefault()
 
-    const result = reportDetailsSchema.safeParse({ ...form, behaviorId })
+    // Per space: work asks who it is about, consumption which business.
+    // The server applies the same rules from the behaviour row.
+    const result = reportDetailsSchemaFor(key).safeParse({ ...form, behaviorId })
     if (!result.success) {
       setErrors(fieldErrors(result.error))
       return
@@ -95,6 +108,13 @@ export function ReportDetailsPage() {
   }
 
   const set = (patch) => setForm((current) => ({ ...current, ...patch }))
+
+  // A work Hook is about a person or about the employer. The other spaces
+  // describe a place, so they ask nothing of the sort.
+  const asksWhoItIsAbout = key === 'work'
+  // A consumption Hook is about a business: that is the required field,
+  // and the business's own town stands in for the locality picker.
+  const consumption = key === 'consumption'
 
   return (
     <WizardShell title={title} step={3} backTo={paths.space(key)}>
@@ -112,12 +132,54 @@ export function ReportDetailsPage() {
         </div>
 
         <form onSubmit={submit} className="mt-6 flex flex-col gap-6" noValidate>
-          <LocalityPicker
-            value={form.locality}
-            onChange={(locality) => set({ locality })}
-            error={errors.locality}
-            disabled={file.isPending}
-          />
+          {asksWhoItIsAbout && (
+            <TargetField
+              form={form}
+              set={set}
+              errors={errors}
+              disabled={file.isPending}
+              targets={WORK_TARGETS}
+              legend="על מי/מה?"
+            />
+          )}
+
+          {consumption ? (
+            <>
+              <BusinessPicker
+                value={form.business}
+                onChange={(business) => set({ business })}
+                error={errors.business}
+                disabled={file.isPending}
+              />
+
+              <TextField
+                icon={UserRound}
+                label="שם הנציג/ה או העובד/ת"
+                placeholder="מי היה/תה במגע איתך"
+                maxLength={120}
+                value={form.staffName}
+                onChange={(staffName) => set({ staffName })}
+                disabled={file.isPending}
+              />
+
+              <TextField
+                icon={MapPin}
+                label="איפה פיזית זה קרה?"
+                placeholder="מיקום, כתובת או תיאור המקום, למשל: בקופה"
+                maxLength={200}
+                value={form.placeText}
+                onChange={(placeText) => set({ placeText })}
+                disabled={file.isPending}
+              />
+            </>
+          ) : (
+            <LocalityPicker
+              value={form.locality}
+              onChange={(locality) => set({ locality })}
+              error={errors.locality}
+              disabled={file.isPending}
+            />
+          )}
 
           <WhenField form={form} set={set} disabled={file.isPending} />
 
@@ -147,8 +209,14 @@ export function ReportDetailsPage() {
           <p className="flex items-start gap-2 rounded-xl bg-amber-50 p-3.5 text-[13px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
             <Info size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
             <span>
-              כדי לשלוח את ה-<bdi>Hook</bdi>, יש לבחור את היישוב (רשות מקומית) או להשתמש בלחצן
-              ״המיקום שלי״ לזיהוי אוטומטי.
+              {consumption ? (
+                <>כדי לשלוח את ה-<bdi>Hook</bdi>, יש למלא את שם העסק.</>
+              ) : (
+                <>
+                  כדי לשלוח את ה-<bdi>Hook</bdi>, יש לבחור את היישוב (רשות מקומית) או להשתמש
+                  בלחצן ״המיקום שלי״ לזיהוי אוטומטי.
+                </>
+              )}
             </span>
           </p>
 
@@ -173,6 +241,29 @@ export function ReportDetailsPage() {
         </form>
       </WizardCard>
     </WizardShell>
+  )
+}
+
+/* -------------------------------------------------------------- text field */
+
+/** An optional one-line field with an icon in its label. */
+function TextField({ icon: Icon, label, placeholder, maxLength, value, onChange, disabled }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--l-ink)]">
+        <Icon size={15} className="text-[var(--l-muted)]" aria-hidden="true" />
+        {label} <span className="font-normal text-[var(--l-muted)]">(אופציונלי)</span>
+      </span>
+      <input
+        type="text"
+        maxLength={maxLength}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="h-11 w-full rounded-xl border border-[var(--l-ring)] bg-white px-4 text-[15px] text-[var(--l-ink)] outline-none transition-colors placeholder:text-[var(--l-muted)]/70 focus:border-[var(--l-primary)]"
+      />
+    </label>
   )
 }
 

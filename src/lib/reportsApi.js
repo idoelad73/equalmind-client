@@ -69,6 +69,43 @@ export function detectLocality() {
   })
 }
 
+/* -------------------------------------------------------------- businesses */
+
+/**
+ * Business search for the consumption form. `near` is the browser's fix,
+ * sent only when the reporter asked for it; the server rounds it to ~1km
+ * before it goes anywhere. Returns { results, degraded } - degraded means
+ * the search is down and the name can simply be typed.
+ */
+export async function searchPlaces(q, near) {
+  const { data } = await api.get('/registry/places', {
+    params: { q: q.trim(), ...(near ? { lat: near.lat, lon: near.lon } : null) },
+  })
+  return data
+}
+
+/** The browser's position, for ranking nearby branches first. */
+export function currentPosition() {
+  return new Promise((resolve, reject) => {
+    if (!('geolocation' in navigator)) {
+      reject(new Error('הדפדפן אינו תומך בזיהוי מיקום.'))
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => resolve({ lat: coords.latitude, lon: coords.longitude }),
+      (error) =>
+        reject(
+          new Error(
+            error.code === error.PERMISSION_DENIED
+              ? 'לא ניתנה הרשאת מיקום. אפשר לחפש גם בלי.'
+              : 'זיהוי המיקום נכשל. אפשר לחפש גם בלי.',
+          ),
+        ),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    )
+  })
+}
+
 /* ---------------------------------------------------------------- upload */
 
 /**

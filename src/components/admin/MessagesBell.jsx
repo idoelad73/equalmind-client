@@ -16,7 +16,7 @@ import { MessagesModal } from './MessagesModal'
  * retrying, and retrying it would mean four rejected requests per page load
  * for every non-staff user.
  */
-export function MessagesBell() {
+export function MessagesBell({ variant = 'icon' }) {
   const [open, setOpen] = useState(false)
 
   const count = useQuery({
@@ -32,13 +32,47 @@ export function MessagesBell() {
   if (count.isError || count.data === undefined) return null
 
   const pending = count.data
+  const label = pending > 0 ? `הודעות מערכת, ${pending} ממתינות` : 'הודעות מערכת'
+
+  // Two shapes, one behaviour. 'icon' is the compact control for a bar;
+  // 'sidebar' is a labelled row that matches the navigation links beside
+  // it, because an unlabelled icon in a column of words reads as a glitch.
+  if (variant === 'sidebar') {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={label}
+          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-[15px] font-medium text-[var(--l-muted)] transition-colors hover:bg-white/70 hover:text-[var(--l-ink)]"
+        >
+          {/* Same 32px tile the navigation rows use, so the icons line up
+              down the panel instead of this one sitting half a step in. */}
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--l-muted)] transition-colors group-hover:text-[var(--l-primary)]">
+            <Inbox size={17} strokeWidth={2} aria-hidden="true" />
+          </span>
+          הודעות מערכת
+          {pending > 0 && (
+            <span
+              className="ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white"
+              aria-hidden="true"
+            >
+              {pending > 99 ? '99+' : pending}
+            </span>
+          )}
+        </button>
+
+        <MessagesModal open={open} onClose={() => setOpen(false)} />
+      </>
+    )
+  }
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={pending > 0 ? `הודעות מערכת, ${pending} ממתינות` : 'הודעות מערכת'}
+        aria-label={label}
         className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--l-muted)] transition-colors hover:bg-[var(--l-soft)] hover:text-[var(--l-primary)]"
       >
         {/* Inbox, not a bell. A bell says "something happened"; this is a
@@ -50,9 +84,9 @@ export function MessagesBell() {
 
         {pending > 0 && (
           <span
-            // Orange, not the product green: this is a count of work waiting,
-            // and it should not read as a success state.
-            className="absolute -top-0.5 -end-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[11px] font-bold text-white ring-2 ring-white"
+            // Red, not the product green: this is a count of work waiting,
+            // and it must not read as a success state.
+            className="absolute -top-0.5 -end-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white ring-2 ring-white"
             aria-hidden="true"
           >
             {pending > 99 ? '99+' : pending}

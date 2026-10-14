@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Mail, ShieldCheck, Smartphone, UserRound } from 'lucide-react'
 import { OrgLinkCard } from '@/components/org/OrgLinkCard'
+import { BackToHome } from '@/components/ui/BackToHome'
 import { fetchMyProfile } from '@/lib/registryApi'
 import { useAuthStore } from '@/store/authStore'
 
@@ -23,6 +24,9 @@ export function ProfilePage() {
   return (
     <section className="flex max-w-2xl flex-col gap-8">
       <div>
+        {/* -ms-3 cancels the link's own padding so its text lines up with
+            the heading below it rather than sitting a step inside. */}
+        <BackToHome className="-ms-3 mb-1" />
         <h1 className="text-2xl font-semibold text-slate-900">פרופיל</h1>
         <p className="mt-1 text-sm text-slate-600">פרטי החשבון שלך.</p>
       </div>
